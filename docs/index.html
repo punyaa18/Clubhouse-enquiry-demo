@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clubhouse Enquiry Demo</title>
+<style>
+  :root {
+    --brand: #1b4332;
+    --accent: #d4af37;
+    --text: #1a1a1a;
+    --muted: #6b7280;
+    --bg: #f7f7f5;
+    --surface: #ffffff;
+    --border: #e0ded8;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    line-height: 1.6;
+  }
+  header {
+    background: var(--brand);
+    color: #fff;
+    padding: 2.5rem 1.25rem;
+    text-align: center;
+  }
+  header h1 { margin: 0 0 0.4rem; font-size: 2rem; }
+  header p { margin: 0; color: var(--accent); font-weight: 600; }
+  main {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 4rem;
+  }
+  section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  h2 { margin-top: 0; color: var(--brand); font-size: 1.2rem; }
+  .pill-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+  .pill {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.3rem 0.8rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .btn {
+    display: inline-block;
+    background: var(--brand);
+    color: #fff;
+    text-decoration: none;
+    font-weight: 600;
+    padding: 0.85rem 1.5rem;
+    border-radius: var(--radius);
+    min-height: 44px;
+  }
+  .note {
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+  ul { padding-left: 1.2rem; }
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.85rem;
+    padding-bottom: 2rem;
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1>⛳ Clubhouse Enquiry Demo</h1>
+    <p>A small Flask + SQLite take-home project</p>
+  </header>
+  <main>
+    <section>
+      <h2>What this is</h2>
+      <p>
+        A simple enquiry form and staff follow-up tool for a golf club, built to be
+        easy to run and easy to explain line by line. Visitors submit a membership,
+        society day, or event enquiry; staff see a dashboard flagging anything that's
+        gone 2+ days without a reply.
+      </p>
+      <div class="pill-row">
+        <span class="pill">Python 3.11+</span>
+        <span class="pill">Flask</span>
+        <span class="pill">SQLite</span>
+        <span class="pill">Jinja templates</span>
+        <span class="pill">Plain CSS</span>
+        <span class="pill">pytest</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>Why this isn't running live here</h2>
+      <p>
+        This page is hosted on GitHub Pages, which only serves static files — it can't
+        run a Flask server or an SQLite database. The actual app lives in the repo and
+        runs locally (or on any real Python host) in a few commands.
+      </p>
+      <p class="note">See the README for setup, seeding demo data, and running tests.</p>
+    </section>
+
+    <section>
+      <h2>Features</h2>
+      <ul>
+        <li>Public enquiry form with server-side validation and friendly error messages</li>
+        <li>Automatic confirmation "email" — logged to console and stored in the database</li>
+        <li>Staff dashboard with newest-first enquiries and a "Follow-up due" badge</li>
+        <li>Simulated clock (advance/reset days) so the 2-day follow-up rule is demoable instantly</li>
+        <li>Honeypot field + in-memory rate limiting against spam</li>
+        <li>Seed command for six made-up demo enquiries at different ages</li>
+      </ul>
+    </section>
+
+    <section style="text-align:center;">
+      <a class="btn" href="https://github.com/punyaa18/Clubhouse-enquiry-demo">View the code on GitHub</a>
+    </section>
+  </main>
+  <footer>Made-up data only &middot; built as a take-home exercise</footer>
+</body>
+</html>
