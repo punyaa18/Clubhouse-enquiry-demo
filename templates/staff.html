@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Staff - Clubhouse{% endblock %}
+{% block content %}
+<h1>Enquiries</h1>
+
+<div class="staff-toolbar">
+  <p class="follow-up-count">
+    <strong>{{ follow_up_count }}</strong> follow-up{{ 's' if follow_up_count != 1 else '' }} due
+  </p>
+  <p class="sim-time">Simulated date: {{ simulated_now.strftime('%d %b %Y') }} (offset: {{ day_offset }} day{{ 's' if day_offset != 1 else '' }})</p>
+  <form method="post" action="{{ url_for('advance_day') }}" class="inline-form">
+    <button type="submit" class="btn btn-secondary">Advance 1 day</button>
+  </form>
+  <form method="post" action="{{ url_for('reset_time') }}" class="inline-form">
+    <button type="submit" class="btn btn-secondary">Reset time</button>
+  </form>
+  <a class="btn btn-secondary" href="{{ url_for('staff_emails') }}">Sent emails</a>
+</div>
+
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Type</th>
+      <th>Status</th>
+      <th>Submitted</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for enquiry in enquiries %}
+    <tr>
+      <td>{{ enquiry.name }}</td>
+      <td>{{ enquiry.type }}</td>
+      <td>
+        {{ enquiry.status }}
+        {% if enquiry.follow_up_due %}<span class="badge badge-due">Follow-up due</span>{% endif %}
+      </td>
+      <td>{{ enquiry.created_at[:10] }}</td>
+      <td>
+        {% if enquiry.status == 'New' %}
+        <form method="post" action="{{ url_for('mark_contacted', enquiry_id=enquiry.id) }}" class="inline-form">
+          <button type="submit" class="btn btn-small">Mark as Contacted</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5">No enquiries yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

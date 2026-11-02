@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Make an Enquiry - Clubhouse{% endblock %}
+{% block content %}
+<h1>Make an enquiry</h1>
+<p>Fill in the form below and we'll get back to you.</p>
+
+{% if errors.form %}
+  <p class="error-banner">{{ errors.form }}</p>
+{% endif %}
+
+<form method="post" action="{{ url_for('enquiry_form') }}" novalidate>
+  <!-- honeypot: hidden from real users, bots often fill every field -->
+  <div class="honeypot">
+    <label for="website">Website</label>
+    <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
+  </div>
+
+  <div class="field">
+    <label for="name">Name</label>
+    <input type="text" id="name" name="name" value="{{ values.get('name', '') }}">
+    {% if errors.name %}<p class="field-error">{{ errors.name }}</p>{% endif %}
+  </div>
+
+  <div class="field">
+    <label for="email">Email</label>
+    <input type="email" id="email" name="email" value="{{ values.get('email', '') }}">
+    {% if errors.email %}<p class="field-error">{{ errors.email }}</p>{% endif %}
+  </div>
+
+  <div class="field">
+    <label for="enquiry_type">Enquiry type</label>
+    <select id="enquiry_type" name="enquiry_type">
+      <option value="" disabled {% if not values.get('enquiry_type') %}selected{% endif %}>Choose one...</option>
+      {% for option in enquiry_types %}
+        <option value="{{ option }}" {% if values.get('enquiry_type') == option %}selected{% endif %}>{{ option }}</option>
+      {% endfor %}
+    </select>
+    {% if errors.enquiry_type %}<p class="field-error">{{ errors.enquiry_type }}</p>{% endif %}
+  </div>
+
+  <div class="field">
+    <label for="message">Message</label>
+    <textarea id="message" name="message" rows="5">{{ values.get('message', '') }}</textarea>
+    {% if errors.message %}<p class="field-error">{{ errors.message }}</p>{% endif %}
+  </div>
+
+  <button type="submit" class="btn btn-primary">Send enquiry</button>
+</form>
+{% endblock %}

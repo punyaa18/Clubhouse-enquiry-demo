@@ -1,0 +1,192 @@
+/* Retheme a club's colours by changing these variables. */
+:root {
+  --brand: #1b4332;
+  --accent: #d4af37;
+  --text: #1a1a1a;
+  --muted: #6b7280;
+  --bg: #f7f7f5;
+  --surface: #ffffff;
+  --error: #b42318;
+  --border: #e0ded8;
+  --radius: 8px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  line-height: 1.5;
+}
+
+.site-header {
+  background: var(--brand);
+  color: #fff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+}
+
+.site-header .brand {
+  color: #fff;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.site-header .staff-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+}
+
+h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
+
+.field { margin-bottom: 1.1rem; }
+
+label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+
+input[type="text"],
+input[type="email"],
+select,
+textarea {
+  width: 100%;
+  padding: 0.75rem;
+  font-size: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.field-error, .error-banner {
+  color: var(--error);
+  font-size: 0.9rem;
+  margin-top: 0.35rem;
+}
+
+.error-banner {
+  background: #fdecea;
+  border: 1px solid var(--error);
+  border-radius: var(--radius);
+  padding: 0.75rem;
+}
+
+.honeypot {
+  position: absolute;
+  left: -9999px;
+  top: -9999px;
+}
+
+.btn {
+  display: inline-block;
+  padding: 0.85rem 1.5rem;
+  border-radius: var(--radius);
+  border: none;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  min-height: 44px;
+}
+
+.btn-primary {
+  background: var(--brand);
+  color: #fff;
+}
+
+.btn-secondary {
+  background: var(--surface);
+  color: var(--brand);
+  border: 1px solid var(--brand);
+}
+
+.btn-small {
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  min-height: 36px;
+  background: var(--accent);
+  color: var(--text);
+}
+
+.inline-form { display: inline; }
+
+.staff-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 1.25rem;
+}
+
+.follow-up-count {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.6rem 1rem;
+  margin: 0;
+}
+
+.sim-time {
+  color: var(--muted);
+  margin: 0;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 480px;
+}
+
+th, td {
+  text-align: left;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+th { color: var(--muted); font-size: 0.85rem; text-transform: uppercase; }
+
+.badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.badge-due {
+  background: #fdecea;
+  color: var(--error);
+}
+
+@media (max-width: 480px) {
+  .container { padding: 1rem; }
+  .btn { width: 100%; text-align: center; }
+  .staff-toolbar .btn { width: auto; }
+}

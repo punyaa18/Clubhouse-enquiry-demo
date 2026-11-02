@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Sent Emails - Clubhouse{% endblock %}
+{% block content %}
+<h1>Sent emails</h1>
+<p><a href="{{ url_for('staff') }}">&larr; Back to enquiries</a></p>
+
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>To</th>
+      <th>Subject</th>
+      <th>Sent at</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for email in emails %}
+    <tr>
+      <td>{{ email.to_address }}</td>
+      <td>{{ email.subject }}</td>
+      <td>{{ email.sent_at }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="3">No emails sent yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}
