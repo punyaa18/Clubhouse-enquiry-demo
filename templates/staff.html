@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros.html" import status_badge, status_form %}
 {% block title %}Staff - Clubhouse{% endblock %}
 {% block content %}
 <h1>Enquiries</h1>
@@ -9,13 +10,20 @@
   </p>
   <p class="sim-time">Simulated date: {{ simulated_now.strftime('%d %b %Y') }} (offset: {{ day_offset }} day{{ 's' if day_offset != 1 else '' }})</p>
   <form method="post" action="{{ url_for('advance_day') }}" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit" class="btn btn-secondary">Advance 1 day</button>
   </form>
   <form method="post" action="{{ url_for('reset_time') }}" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit" class="btn btn-secondary">Reset time</button>
   </form>
-  <a class="btn btn-secondary" href="{{ url_for('staff_emails') }}">Sent emails</a>
 </div>
+
+<nav class="filters" aria-label="Filter by status">
+  {% for f in filters %}
+    <a href="{{ url_for('staff', filter=f) }}" {% if f == current_filter %}aria-current="page"{% endif %}>{{ f }}</a>
+  {% endfor %}
+</nav>
 
 <div class="table-wrap">
 <table>
@@ -25,31 +33,29 @@
       <th>Type</th>
       <th>Status</th>
       <th>Submitted</th>
-      <th></th>
+      <th>Change status</th>
     </tr>
   </thead>
   <tbody>
     {% for enquiry in enquiries %}
     <tr>
-      <td>{{ enquiry.name }}</td>
+      <td><a href="{{ url_for('enquiry_detail', enquiry_id=enquiry.id) }}">{{ enquiry.name }}</a><br>
+        <span class="muted">{{ enquiry.email }}</span></td>
       <td>{{ enquiry.type }}</td>
       <td>
-        {{ enquiry.status }}
+        {{ status_badge(enquiry.status) }}
         {% if enquiry.follow_up_due %}<span class="badge badge-due">Follow-up due</span>{% endif %}
+        <br><span class="muted">since {{ enquiry.status_changed_at[:10] }}</span>
       </td>
       <td>{{ enquiry.created_at[:10] }}</td>
-      <td>
-        {% if enquiry.status == 'New' %}
-        <form method="post" action="{{ url_for('mark_contacted', enquiry_id=enquiry.id) }}" class="inline-form">
-          <button type="submit" class="btn btn-small">Mark as Contacted</button>
-        </form>
-        {% endif %}
-      </td>
+      <td>{{ status_form(enquiry, statuses, request.full_path) }}</td>
     </tr>
     {% else %}
-    <tr><td colspan="5">No enquiries yet.</td></tr>
+    <tr><td colspan="5">No enquiries match this filter.</td></tr>
     {% endfor %}
   </tbody>
 </table>
 </div>
+<p class="muted">Enquiries still New after 2 or more days are flagged "Follow-up due" and listed first.
+  Click a name to see the conversation and reply.</p>
 {% endblock %}

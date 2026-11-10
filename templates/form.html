@@ -4,11 +4,15 @@
 <h1>Make an enquiry</h1>
 <p>Fill in the form below and we'll get back to you.</p>
 
+<p class="notice"><strong>Demo only.</strong> Please use a throwaway address (for example
+  yourname@yopmail.com), not personal data. Everything is deleted after 24 hours.</p>
+
 {% if errors.form %}
   <p class="error-banner">{{ errors.form }}</p>
 {% endif %}
 
 <form method="post" action="{{ url_for('enquiry_form') }}" novalidate>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <!-- honeypot: hidden from real users, bots often fill every field -->
   <div class="honeypot">
     <label for="website">Website</label>
@@ -25,6 +29,7 @@
     <label for="email">Email</label>
     <input type="email" id="email" name="email" value="{{ values.get('email', '') }}">
     {% if errors.email %}<p class="field-error">{{ errors.email }}</p>{% endif %}
+    <p class="field-hint">We'll send a confirmation email to this address.</p>
   </div>
 
   <div class="field">

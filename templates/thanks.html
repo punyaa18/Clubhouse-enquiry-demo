@@ -2,6 +2,24 @@
 {% block title %}Thanks - Clubhouse{% endblock %}
 {% block content %}
 <h1>Thanks for your enquiry!</h1>
-<p>We've sent a confirmation email and will be in touch soon.</p>
-<a class="btn btn-secondary" href="{{ url_for('enquiry_form') }}">Submit another enquiry</a>
+{% set c = confirmation %}
+{% if not c %}
+  <p>We've received your enquiry and will be in touch soon.</p>
+{% elif c.status == 'sent' %}
+  <p>We've emailed a confirmation to <strong>{{ c.email }}</strong>. If you don't see it in a
+    minute or two, check your spam folder.</p>
+{% elif c.status == 'simulated' %}
+  <p>Your enquiry is saved. The confirmation email to <strong>{{ c.email }}</strong> was
+    <strong>SIMULATED, not really sent</strong> ({{ simulated_reason }}).</p>
+{% elif c.status == 'skipped' %}
+  <p>Your enquiry is saved and we'll be in touch soon. This demo has reached its email limit
+    for today, so we couldn't send a confirmation to <strong>{{ c.email }}</strong> this time.</p>
+{% else %}
+  <p>Your enquiry is saved and we'll be in touch soon. We couldn't send the confirmation email
+    to <strong>{{ c.email }}</strong> just now.</p>
+{% endif %}
+<p>
+  <a class="btn btn-secondary" href="{{ url_for('enquiry_form') }}">Submit another enquiry</a>
+  <a class="btn btn-secondary" href="{{ url_for('staff') }}">See it on the staff page</a>
+</p>
 {% endblock %}

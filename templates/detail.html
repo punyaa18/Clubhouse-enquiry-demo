@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% from "macros.html" import status_badge, status_form, delivery_badge %}
+{% block title %}{{ enquiry.name }} - Clubhouse{% endblock %}
+{% block content %}
+<p><a href="{{ url_for('staff') }}">&larr; Back to enquiries</a></p>
+<h1>{{ enquiry.name }}</h1>
+<p class="muted">{{ enquiry.email }} &middot; {{ enquiry.type }} &middot; submitted {{ enquiry.created_at[:10] }}</p>
+
+<div class="card">
+  <p>{{ status_badge(enquiry.status) }}
+    {% if enquiry.follow_up_due %}<span class="badge badge-due">Follow-up due</span>{% endif %}
+    <span class="muted">status changed {{ enquiry.status_changed_at[:16]|replace('T', ' ') }}</span></p>
+  {{ status_form(enquiry, statuses, url_for('enquiry_detail', enquiry_id=enquiry.id)) }}
+</div>
+
+<h2>Conversation</h2>
+<ul class="thread">
+  {% for m in messages %}
+  <li class="card {{ m.direction }}">
+    <p class="muted">
+      {% if m.direction == 'inbound' %}From <strong>{{ m.from_address }}</strong>{% else %}To <strong>{{ m.to_address }}</strong>{% endif %}
+      &middot; {{ m.kind|capitalize }} &middot; {{ m.sent_at[:16]|replace('T', ' ') }}
+      &middot; {{ delivery_badge(m) }}
+    </p>
+    <strong>{{ m.subject }}</strong>
+    <pre>{{ m.body }}</pre>
+  </li>
+  {% endfor %}
+</ul>
+
+<h2 id="reply">Reply</h2>
+{% if errors.form %}<p class="error-banner">{{ errors.form }}</p>{% endif %}
+{% if replies_left == 0 and not errors %}
+  <p class="notice">This enquiry has had {{ max_replies }} replies, the most this demo allows.</p>
+{% else %}
+<form method="post" action="{{ url_for('reply', enquiry_id=enquiry.id) }}#reply" novalidate class="card">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="field">
+    <label for="to">To</label>
+    <input type="text" id="to" value="{{ enquiry.email }}" readonly>
+  </div>
+  <div class="field">
+    <label for="subject">Subject</label>
+    <input type="text" id="subject" name="subject" maxlength="{{ subject_max }}" value="{{ values.subject }}">
+    {% if errors.subject %}<p class="field-error">{{ errors.subject }}</p>{% endif %}
+  </div>
+  <div class="field">
+    <label for="body">Message</label>
+    <textarea id="body" name="body" rows="9" maxlength="{{ body_max }}">{{ values.body }}</textarea>
+    {% if errors.body %}<p class="field-error">{{ errors.body }}</p>{% endif %}
+    <p class="field-hint">Plain text, up to {{ '{:,}'.format(body_max) }} characters. This footer is added:
+      "{{ footer }}"</p>
+  </div>
+  <p class="field-hint">
+    {% if sending_for_real %}
+      This is sent as a real email from <strong>{{ reply_to }}</strong>. When {{ enquiry.name }} replies,
+      the answer arrives in that inbox.
+    {% else %}
+      SIMULATED: {{ simulated_reason }}, so the reply is stored here but not really sent.
+    {% endif %}
+    {{ replies_left }} of {{ max_replies }} replies left for this enquiry.
+  </p>
+  <button type="submit" class="btn btn-primary">Send reply</button>
+</form>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,22 @@
+{% macro status_badge(status) -%}
+  <span class="badge badge-status badge-{{ status|replace(' ', '-') }}">{{ status }}</span>
+{%- endmacro %}
+
+{% macro status_form(enquiry, statuses, next_url) -%}
+<form method="post" action="{{ url_for('update_status', enquiry_id=enquiry.id) }}" class="status-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="next" value="{{ next_url }}">
+  <label class="honeypot" for="status-{{ enquiry.id }}">Status for {{ enquiry.name }}</label>
+  <select id="status-{{ enquiry.id }}" name="status" data-autosubmit>
+    {% for option in statuses %}
+      <option value="{{ option }}" {% if option == enquiry.status %}selected{% endif %}>{{ option }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn-small save-btn">Save</button>
+</form>
+{%- endmacro %}
+
+{% macro delivery_badge(email) -%}
+  <span class="badge badge-{{ email.status }}">{{ email.status|upper }}</span>
+  {%- if email.error %} <span class="field-error">{{ email.error }}</span>{% endif %}
+{%- endmacro %}

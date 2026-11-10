@@ -5,14 +5,31 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Clubhouse Enquiries{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script>document.documentElement.classList.add("js");</script>
 </head>
 <body>
   <header class="site-header">
     <a class="brand" href="{{ url_for('enquiry_form') }}">⛳ Clubhouse</a>
-    <a class="staff-link" href="{{ url_for('staff') }}">Staff</a>
+    <nav>
+      <a class="staff-link" href="{{ url_for('enquiry_form') }}">Enquire</a>
+      <a class="staff-link" href="{{ url_for('staff') }}">Staff</a>
+      <a class="staff-link" href="{{ url_for('staff_emails') }}">Email log</a>
+    </nav>
   </header>
+  {% if not sending_for_real %}
+  <p class="mode-banner">SIMULATED mode: {{ simulated_reason }}, so emails are stored here but not really sent.</p>
+  {% endif %}
   <main class="container">
+    {% for message in get_flashed_messages() %}
+      <p class="flash">{{ message }}</p>
+    {% endfor %}
     {% block content %}{% endblock %}
   </main>
+  <script>
+    // status dropdowns save on change; the Save button is the no-JS fallback
+    document.querySelectorAll("select[data-autosubmit]").forEach(function (select) {
+      select.addEventListener("change", function () { select.form.submit(); });
+    });
+  </script>
 </body>
 </html>

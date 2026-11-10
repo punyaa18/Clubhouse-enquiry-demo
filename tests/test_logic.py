@@ -21,6 +21,13 @@ def test_not_due_if_contacted():
     assert is_follow_up_due(enquiry, now) is False
 
 
+def test_only_new_enquiries_are_due():
+    now = datetime(2026, 1, 10)
+    old = (now - timedelta(days=10)).isoformat()
+    for status in ["Contacted", "Awaiting reply", "Booked", "Closed"]:
+        assert is_follow_up_due({"status": status, "created_at": old}, now) is False
+
+
 def test_due_after_advancing_simulated_time():
     created_at = datetime(2026, 1, 10)
     enquiry = {"status": "New", "created_at": created_at.isoformat()}

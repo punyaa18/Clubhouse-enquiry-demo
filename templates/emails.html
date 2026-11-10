@@ -1,29 +1,36 @@
 {% extends "base.html" %}
-{% block title %}Sent Emails - Clubhouse{% endblock %}
+{% from "macros.html" import delivery_badge %}
+{% block title %}Email Log - Clubhouse{% endblock %}
 {% block content %}
-<h1>Sent emails</h1>
+<h1>Email log</h1>
 <p><a href="{{ url_for('staff') }}">&larr; Back to enquiries</a></p>
+<p class="muted">Every message in and out, newest first. Delivery: SENT (really emailed), SIMULATED
+  (stored only), FAILED (with the exact error), SKIPPED (a daily limit was reached), RECEIVED (an incoming enquiry).</p>
 
 <div class="table-wrap">
 <table>
   <thead>
     <tr>
-      <th>To</th>
+      <th>Direction</th>
+      <th>From / To</th>
       <th>Subject</th>
-      <th>Sent at</th>
+      <th>Time</th>
       <th>Delivery</th>
     </tr>
   </thead>
   <tbody>
     {% for email in emails %}
     <tr>
-      <td>{{ email.to_address }}</td>
-      <td>{{ email.subject }}</td>
-      <td>{{ email.sent_at }}</td>
-      <td{% if email.delivery.startswith('Failed') %} class="field-error"{% endif %}>{{ email.delivery }}</td>
+      <td>{{ email.direction|capitalize }}<br><span class="muted">{{ email.kind }}</span></td>
+      <td><span class="muted">From</span> {{ email.from_address }}<br><span class="muted">To</span> {{ email.to_address }}</td>
+      <td>
+        {% if email.enquiry_name %}<a href="{{ url_for('enquiry_detail', enquiry_id=email.enquiry_id) }}">{{ email.subject }}</a>{% else %}{{ email.subject }}{% endif %}
+      </td>
+      <td>{{ email.sent_at[:16]|replace('T', ' ') }}</td>
+      <td>{{ delivery_badge(email) }}</td>
     </tr>
     {% else %}
-    <tr><td colspan="4">No emails sent yet.</td></tr>
+    <tr><td colspan="5">No emails yet.</td></tr>
     {% endfor %}
   </tbody>
 </table>

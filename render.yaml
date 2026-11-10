@@ -1,0 +1,29 @@
+# Render Blueprint: free web service running the Flask app with gunicorn.
+# Secrets (SMTP_USER, SMTP_PASSWORD) are marked sync: false, so Render asks for them in
+# its dashboard; they are never stored in this repo.
+services:
+  - type: web
+    name: clubhouse-enquiry-demo
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # one worker: the per-IP rate limit is kept in memory
+    startCommand: gunicorn app:app --workers 1 --threads 4 --bind 0.0.0.0:$PORT
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: EMAILS_ENABLED
+        value: "true"
+      - key: MAX_EMAILS_PER_DAY
+        value: "50"
+      - key: SECRET_KEY
+        generateValue: true
