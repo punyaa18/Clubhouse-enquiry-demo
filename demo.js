@@ -5,9 +5,9 @@
 // With any of the three left empty, emails are stored as SIMULATED instead of sent.
 // ===================================================================================
 const EMAILJS = {
-  serviceId: "",
-  templateId: "",
-  publicKey: "",
+  serviceId: "service_gdgrd7b",
+  templateId: "template_c0oiwej",
+  publicKey: "1khqvfarvV2e_M0FC",
 };
 // Every real email from this demo goes to this one inbox, whatever address was typed.
 const DEMO_RECIPIENT = "punyaa@yopmail.com";
