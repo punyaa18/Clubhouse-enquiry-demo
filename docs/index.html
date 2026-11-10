@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Clubhouse Enquiry Demo</title>
 <style>
+  /* Same palette and components as static/style.css in the Flask app. */
   :root {
     --brand: #1b4332;
     --accent: #d4af37;
@@ -12,6 +13,8 @@
     --muted: #6b7280;
     --bg: #f7f7f5;
     --surface: #ffffff;
+    --error: #b42318;
+    --ok: #1b6b3a;
     --border: #e0ded8;
     --radius: 8px;
   }
@@ -21,111 +24,414 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     color: var(--text);
     background: var(--bg);
-    line-height: 1.6;
+    line-height: 1.5;
   }
-  header {
+  .site-header {
     background: var(--brand);
     color: #fff;
-    padding: 2.5rem 1.25rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+  }
+  .site-header .brand { color: #fff; text-decoration: none; font-weight: 700; font-size: 1.1rem; }
+  .site-header nav { display: flex; gap: 1.1rem; flex-wrap: wrap; }
+  .site-header nav a { color: #fff; text-decoration: none; font-weight: 600; opacity: 0.8; }
+  .site-header nav a.active { color: var(--accent); opacity: 1; }
+  .demo-banner {
+    background: #fff8e1;
+    border-bottom: 1px solid #ecd9a0;
+    padding: 0.6rem 1.25rem;
+    font-size: 0.9rem;
     text-align: center;
   }
-  header h1 { margin: 0 0 0.4rem; font-size: 2rem; }
-  header p { margin: 0; color: var(--accent); font-weight: 600; }
-  main {
-    max-width: 760px;
-    margin: 0 auto;
-    padding: 2rem 1.25rem 4rem;
-  }
-  section {
-    background: var(--surface);
+  .demo-banner a { color: var(--brand); font-weight: 600; }
+  .container { max-width: 760px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+  h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
+  .lead { color: var(--muted); margin-top: 0; }
+  .field { margin-bottom: 1.1rem; }
+  label { display: block; font-weight: 600; margin-bottom: 0.35rem; }
+  input[type="text"], input[type="email"], select, textarea {
+    width: 100%;
+    padding: 0.75rem;
+    font-size: 1rem;
+    font-family: inherit;
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
+    background: var(--surface);
+    color: var(--text);
   }
-  h2 { margin-top: 0; color: var(--brand); font-size: 1.2rem; }
-  .pill-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
-  .pill {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 0.3rem 0.8rem;
-    font-size: 0.85rem;
-    color: var(--muted);
-  }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); outline-offset: 1px; }
+  .field-error, .error-banner { color: var(--error); font-size: 0.9rem; margin-top: 0.35rem; }
+  .error-banner { background: #fdecea; border: 1px solid var(--error); border-radius: var(--radius); padding: 0.75rem; }
+  .honeypot { position: absolute; left: -9999px; top: -9999px; }
   .btn {
     display: inline-block;
-    background: var(--brand);
-    color: #fff;
-    text-decoration: none;
-    font-weight: 600;
     padding: 0.85rem 1.5rem;
     border-radius: var(--radius);
+    border: none;
+    font-size: 1rem;
+    font-family: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
     min-height: 44px;
   }
-  .note {
-    font-size: 0.9rem;
-    color: var(--muted);
-  }
-  ul { padding-left: 1.2rem; }
-  footer {
-    text-align: center;
-    color: var(--muted);
-    font-size: 0.85rem;
-    padding-bottom: 2rem;
+  .btn-primary { background: var(--brand); color: #fff; }
+  .btn-secondary { background: var(--surface); color: var(--brand); border: 1px solid var(--brand); }
+  .btn-small { padding: 0.5rem 1rem; font-size: 0.9rem; min-height: 36px; background: var(--accent); color: var(--text); }
+  .btn-link { background: none; border: none; color: var(--muted); text-decoration: underline; cursor: pointer; font: inherit; padding: 0; }
+  .staff-toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin-bottom: 1.25rem; }
+  .follow-up-count { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.6rem 1rem; margin: 0; }
+  .sim-time { color: var(--muted); margin: 0; }
+  .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+  table { width: 100%; border-collapse: collapse; min-width: 480px; }
+  th, td { text-align: left; padding: 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-size: 0.85rem; text-transform: uppercase; }
+  .badge { display: inline-block; margin-left: 0.5rem; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
+  .badge-due { background: #fdecea; color: var(--error); }
+  .badge-new { background: #e8f3ec; color: var(--ok); margin-left: 0; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; margin-bottom: 1rem; }
+  .thanks { text-align: center; padding: 2rem 1.25rem; }
+  .thanks .tick { font-size: 2.5rem; color: var(--ok); line-height: 1; }
+  .email-meta { color: var(--muted); font-size: 0.85rem; margin: 0 0 0.5rem; }
+  .email-body { white-space: pre-wrap; margin: 0; font-family: inherit; }
+  .how { color: var(--muted); font-size: 0.9rem; }
+  .how li { margin-bottom: 0.3rem; }
+  footer { text-align: center; color: var(--muted); font-size: 0.85rem; padding: 0 1.25rem 2rem; }
+  footer .btn-link { font-size: 0.85rem; }
+  @media (max-width: 480px) {
+    .container { padding: 1rem; }
+    .btn { width: 100%; text-align: center; }
+    .staff-toolbar .btn, td .btn { width: auto; }
   }
 </style>
 </head>
 <body>
-  <header>
-    <h1>⛳ Clubhouse Enquiry Demo</h1>
-    <p>A small Flask + SQLite take-home project</p>
+  <header class="site-header">
+    <a class="brand" href="#form">⛳ Clubhouse</a>
+    <nav>
+      <a href="#form" data-view="form">Enquire</a>
+      <a href="#staff" data-view="staff">Staff</a>
+      <a href="#emails" data-view="emails">Sent emails</a>
+    </nav>
   </header>
-  <main>
-    <section>
-      <h2>What this is</h2>
-      <p>
-        A simple enquiry form and staff follow-up tool for a golf club, built to be
-        easy to run and easy to explain line by line. Visitors submit a membership,
-        society day, or event enquiry; staff see a dashboard flagging anything that's
-        gone 2+ days without a reply.
-      </p>
-      <div class="pill-row">
-        <span class="pill">Python 3.11+</span>
-        <span class="pill">Flask</span>
-        <span class="pill">SQLite</span>
-        <span class="pill">Jinja templates</span>
-        <span class="pill">Plain CSS</span>
-        <span class="pill">pytest</span>
+  <div class="demo-banner">
+    Live demo running in your browser — data stays on this device.
+    <a href="https://github.com/punyaa18/Clubhouse-enquiry-demo">View the Flask source on GitHub</a>
+  </div>
+
+  <main class="container">
+    <!-- Enquiry form -->
+    <section id="view-form" hidden>
+      <h1>Make an enquiry</h1>
+      <p class="lead">Fill in the form below and we'll get back to you.</p>
+      <p class="error-banner" id="form-error" hidden></p>
+      <form id="enquiry-form" novalidate>
+        <!-- honeypot: hidden from real users, bots often fill every field -->
+        <div class="honeypot">
+          <label for="website">Website</label>
+          <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="name">Name</label>
+          <input type="text" id="name" name="name">
+          <p class="field-error" data-error="name" hidden></p>
+        </div>
+        <div class="field">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email">
+          <p class="field-error" data-error="email" hidden></p>
+        </div>
+        <div class="field">
+          <label for="enquiry_type">Enquiry type</label>
+          <select id="enquiry_type" name="enquiry_type">
+            <option value="" disabled selected>Choose one...</option>
+            <option>Membership</option>
+            <option>Society day</option>
+            <option>Event</option>
+          </select>
+          <p class="field-error" data-error="enquiry_type" hidden></p>
+        </div>
+        <div class="field">
+          <label for="message">Message</label>
+          <textarea id="message" name="message" rows="5"></textarea>
+          <p class="field-error" data-error="message" hidden></p>
+        </div>
+        <button type="submit" class="btn btn-primary">Send enquiry</button>
+      </form>
+    </section>
+
+    <!-- Thank-you page -->
+    <section id="view-thanks" hidden>
+      <div class="card thanks">
+        <div class="tick">✓</div>
+        <h1>Thanks — we've got your enquiry</h1>
+        <p class="lead">A confirmation email has been sent to <strong id="thanks-email"></strong>.</p>
+        <p>
+          <a class="btn btn-primary" href="#staff">See it on the staff page</a>
+          <a class="btn btn-secondary" href="#emails">View the email</a>
+        </p>
       </div>
     </section>
 
-    <section>
-      <h2>Why this isn't running live here</h2>
-      <p>
-        This page is hosted on GitHub Pages, which only serves static files — it can't
-        run a Flask server or an SQLite database. The actual app lives in the repo and
-        runs locally (or on any real Python host) in a few commands.
-      </p>
-      <p class="note">See the README for setup, seeding demo data, and running tests.</p>
-    </section>
-
-    <section>
-      <h2>Features</h2>
-      <ul>
-        <li>Public enquiry form with server-side validation and friendly error messages</li>
-        <li>Automatic confirmation "email" — logged to console and stored in the database</li>
-        <li>Staff dashboard with newest-first enquiries and a "Follow-up due" badge</li>
-        <li>Simulated clock (advance/reset days) so the 2-day follow-up rule is demoable instantly</li>
-        <li>Honeypot field + in-memory rate limiting against spam</li>
-        <li>Seed command for six made-up demo enquiries at different ages</li>
+    <!-- Staff dashboard -->
+    <section id="view-staff" hidden>
+      <h1>Enquiries</h1>
+      <div class="staff-toolbar">
+        <p class="follow-up-count"><strong id="follow-up-count">0</strong> <span id="follow-up-label">follow-ups</span> due</p>
+        <p class="sim-time" id="sim-time"></p>
+        <button type="button" class="btn btn-secondary" id="advance-day">Advance 1 day</button>
+        <button type="button" class="btn btn-secondary" id="reset-time">Reset time</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Name</th><th>Type</th><th>Status</th><th>Submitted</th><th></th></tr>
+          </thead>
+          <tbody id="enquiry-rows"></tbody>
+        </table>
+      </div>
+      <ul class="how">
+        <li>Enquiries still <strong>New</strong> after 2 or more days get a <span class="badge badge-due" style="margin:0">Follow-up due</span> badge.</li>
+        <li>Use <strong>Advance 1 day</strong> to move the simulated clock forward and watch fresh enquiries become due.</li>
+        <li><strong>Mark as Contacted</strong> clears the flag and records when they were contacted.</li>
       </ul>
     </section>
 
-    <section style="text-align:center;">
-      <a class="btn" href="https://github.com/punyaa18/Clubhouse-enquiry-demo">View the code on GitHub</a>
+    <!-- Sent emails log -->
+    <section id="view-emails" hidden>
+      <h1>Sent emails</h1>
+      <p class="lead">Confirmation emails sent to enquirers, newest first. (In this browser demo they're logged, not delivered.)</p>
+      <div id="email-list"></div>
     </section>
   </main>
-  <footer>Made-up data only &middot; built as a take-home exercise</footer>
+
+  <footer>
+    Made-up data only &middot; built as a take-home exercise &middot;
+    <button type="button" class="btn-link" id="reset-demo">Reset demo data</button>
+  </footer>
+
+<script>
+  // Mirrors app.py / logic.py: same validation, honeypot, rate limit and follow-up rule.
+  const STORAGE_KEY = "clubhouse-demo-v1";
+  const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+  const ENQUIRY_TYPES = ["Membership", "Society day", "Event"];
+  const MESSAGE_MAX_LEN = 1000;
+  const FOLLOW_UP_DAYS = 2;
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+  const RATE_LIMIT_MAX_SUBMISSIONS = 5;
+
+  const DEMO_ENQUIRIES = [
+    ["Alice Brennan", "alice.brennan@example.com", "Membership", "Hi, I'd like to enquire about full membership rates for next season.", 0],
+    ["Tom O'Carroll", "tom.ocarroll@example.com", "Society day", "We're looking to book a society day for 24 golfers in June.", 1],
+    ["Fiona Walsh", "fiona.walsh@example.com", "Event", "Could you tell me about hosting a 40th birthday party at the clubhouse?", 3],
+    ["Declan Murphy", "declan.murphy@example.com", "Membership", "What's included in junior membership this year?", 5],
+    ["Grace Kelly", "grace.kelly@example.com", "Society day", "Enquiring about a corporate golf day for 16 people in September.", 2],
+    ["Liam Fitzgerald", "liam.fitzgerald@example.com", "Event", "Do you cater for wedding receptions on site?", 7],
+  ];
+
+  let state;
+  let submissionLog = [];
+
+  function seedState() {
+    const now = Date.now();
+    return {
+      nextId: DEMO_ENQUIRIES.length + 1,
+      dayOffset: 0,
+      enquiries: DEMO_ENQUIRIES.map(([name, email, type, message, daysAgo], i) => ({
+        id: i + 1, name, email, type, message,
+        status: "New",
+        createdAt: new Date(now - daysAgo * DAY_MS).toISOString(),
+        contactedAt: null,
+      })),
+      emails: [],
+    };
+  }
+
+  function loadState() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch (e) { /* storage unavailable: fall back to in-memory */ }
+    return seedState();
+  }
+
+  function saveState() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+
+  function simulatedNow() {
+    return new Date(Date.now() + state.dayOffset * DAY_MS);
+  }
+
+  function isFollowUpDue(enquiry, now) {
+    if (enquiry.status !== "New") return false;
+    return now - new Date(enquiry.createdAt) >= FOLLOW_UP_DAYS * DAY_MS;
+  }
+
+  function isRateLimited() {
+    const now = Date.now();
+    submissionLog = submissionLog.filter(t => now - t < RATE_LIMIT_WINDOW_MS);
+    return submissionLog.length >= RATE_LIMIT_MAX_SUBMISSIONS;
+  }
+
+  function validateEnquiry(form) {
+    const errors = {};
+    const name = form.name.trim();
+    const email = form.email.trim();
+    const message = form.message.trim();
+    if (!name) errors.name = "Please enter your name.";
+    if (!email) errors.email = "Please enter your email address.";
+    else if (!EMAIL_RE.test(email)) errors.email = "Please enter a valid email address.";
+    if (!ENQUIRY_TYPES.includes(form.enquiry_type)) errors.enquiry_type = "Please choose an enquiry type.";
+    if (!message) errors.message = "Please enter a message.";
+    else if (message.length > MESSAGE_MAX_LEN) errors.message = `Message must be under ${MESSAGE_MAX_LEN} characters.`;
+    return errors;
+  }
+
+  function sendConfirmationEmail(name, email, type, now) {
+    const subject = `We received your ${type} enquiry`;
+    const body = `Hi ${name},\n\nThanks for your ${type} enquiry. A member of our team will be in touch soon.\n\nClubhouse`;
+    console.log(`[EMAIL] to=${email} subject=${JSON.stringify(subject)}\n${body}`);
+    state.emails.push({ to: email, subject, body, sentAt: now.toISOString() });
+  }
+
+  const fmtDate = iso => new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  const fmtDateTime = iso => new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  // --- form ---
+  const formEl = document.getElementById("enquiry-form");
+  const formError = document.getElementById("form-error");
+
+  function showErrors(errors) {
+    document.querySelectorAll("[data-error]").forEach(p => {
+      const msg = errors[p.dataset.error];
+      p.textContent = msg || "";
+      p.hidden = !msg;
+    });
+  }
+
+  formEl.addEventListener("submit", e => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(formEl));
+    data.enquiry_type = data.enquiry_type || "";
+    formError.hidden = true;
+
+    // honeypot: silently drop, like the server does
+    if (data.website) { formEl.reset(); showErrors({}); return; }
+
+    if (isRateLimited()) {
+      formError.textContent = "Too many submissions. Please try again in a minute.";
+      formError.hidden = false;
+      return;
+    }
+
+    const errors = validateEnquiry(data);
+    showErrors(errors);
+    if (Object.keys(errors).length) return;
+
+    submissionLog.push(Date.now());
+    const now = simulatedNow();
+    const name = data.name.trim();
+    const email = data.email.trim();
+    state.enquiries.push({
+      id: state.nextId++, name, email, type: data.enquiry_type,
+      message: data.message.trim(), status: "New",
+      createdAt: now.toISOString(), contactedAt: null,
+    });
+    sendConfirmationEmail(name, email, data.enquiry_type, now);
+    saveState();
+
+    formEl.reset();
+    document.getElementById("thanks-email").textContent = email;
+    location.hash = "#thanks";
+  });
+
+  // --- staff ---
+  function renderStaff() {
+    const now = simulatedNow();
+    const rows = [...state.enquiries].sort((a, b) =>
+      b.createdAt.localeCompare(a.createdAt) || b.id - a.id);
+    const due = rows.filter(e => isFollowUpDue(e, now)).length;
+
+    document.getElementById("follow-up-count").textContent = due;
+    document.getElementById("follow-up-label").textContent = due === 1 ? "follow-up" : "follow-ups";
+    const off = state.dayOffset;
+    document.getElementById("sim-time").textContent =
+      `Simulated date: ${fmtDate(now.toISOString())} (offset: ${off} day${off === 1 ? "" : "s"})`;
+
+    const tbody = document.getElementById("enquiry-rows");
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="5">No enquiries yet.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = rows.map(e => `
+      <tr>
+        <td>${esc(e.name)}<br><small style="color:var(--muted)">${esc(e.email)}</small></td>
+        <td>${esc(e.type)}</td>
+        <td>${esc(e.status)}${isFollowUpDue(e, now) ? '<span class="badge badge-due">Follow-up due</span>' : ""}
+          ${e.contactedAt ? `<br><small style="color:var(--muted)">${fmtDate(e.contactedAt)}</small>` : ""}</td>
+        <td>${fmtDate(e.createdAt)}</td>
+        <td>${e.status === "New" ? `<button type="button" class="btn btn-small" data-contact="${e.id}">Mark as Contacted</button>` : ""}</td>
+      </tr>`).join("");
+  }
+
+  document.getElementById("enquiry-rows").addEventListener("click", e => {
+    const id = Number(e.target.dataset.contact);
+    if (!id) return;
+    const enquiry = state.enquiries.find(x => x.id === id);
+    enquiry.status = "Contacted";
+    enquiry.contactedAt = simulatedNow().toISOString();
+    saveState();
+    renderStaff();
+  });
+
+  document.getElementById("advance-day").addEventListener("click", () => {
+    state.dayOffset += 1; saveState(); renderStaff();
+  });
+  document.getElementById("reset-time").addEventListener("click", () => {
+    state.dayOffset = 0; saveState(); renderStaff();
+  });
+
+  // --- emails ---
+  function renderEmails() {
+    const list = document.getElementById("email-list");
+    const emails = [...state.emails].reverse();
+    list.innerHTML = emails.length
+      ? emails.map(m => `
+        <div class="card">
+          <p class="email-meta">To <strong>${esc(m.to)}</strong> &middot; ${fmtDateTime(m.sentAt)}</p>
+          <h3 style="margin:0 0 0.5rem">${esc(m.subject)}</h3>
+          <pre class="email-body">${esc(m.body)}</pre>
+        </div>`).join("")
+      : `<div class="card">No emails sent yet. <a href="#form">Submit an enquiry</a> to see one appear here.</div>`;
+  }
+
+  document.getElementById("reset-demo").addEventListener("click", () => {
+    state = seedState(); saveState(); route();
+  });
+
+  // --- routing ---
+  const VIEWS = ["form", "thanks", "staff", "emails"];
+  function route() {
+    let view = location.hash.slice(1);
+    if (!VIEWS.includes(view)) view = "form";
+    if (view === "thanks" && !document.getElementById("thanks-email").textContent) view = "form";
+    VIEWS.forEach(v => { document.getElementById(`view-${v}`).hidden = v !== view; });
+    document.querySelectorAll("nav a").forEach(a => a.classList.toggle("active", a.dataset.view === view));
+    if (view === "staff") renderStaff();
+    if (view === "emails") renderEmails();
+    window.scrollTo(0, 0);
+  }
+
+  state = loadState();
+  window.addEventListener("hashchange", route);
+  route();
+</script>
 </body>
 </html>
