@@ -119,8 +119,8 @@
     </nav>
   </header>
   <div class="demo-banner">
-    Static browser-only demo: data stays on this device and confirmation emails are shown, not actually sent.
-    Real email sending lives in the Python app.
+    Browser demo: enquiries are stored on this device.
+    <span id="email-mode">Confirmation emails are shown here but not sent (email service not configured).</span>
     <a href="https://github.com/punyaa18/Clubhouse-enquiry-demo">View the Flask source on GitHub</a>
   </div>
 
@@ -170,7 +170,8 @@
       <div class="card thanks">
         <div class="tick">✓</div>
         <h1>Thanks — we've got your enquiry</h1>
-        <p class="lead">A confirmation email has been sent to <strong id="thanks-email"></strong>.</p>
+        <p class="lead">Confirmation email to <strong id="thanks-email"></strong>:
+          <span id="thanks-delivery"></span></p>
         <p>
           <a class="btn btn-primary" href="#staff">See it on the staff page</a>
           <a class="btn btn-secondary" href="#emails">View the email</a>
@@ -205,7 +206,7 @@
     <!-- Sent emails log -->
     <section id="view-emails" hidden>
       <h1>Sent emails</h1>
-      <p class="lead">Confirmation emails sent to enquirers, newest first. (In this browser demo they're logged, not delivered.)</p>
+      <p class="lead">Confirmation emails sent to enquirers, newest first, with whether delivery succeeded.</p>
       <div id="email-list"></div>
     </section>
   </main>
@@ -215,7 +216,17 @@
     <button type="button" class="btn-link" id="reset-demo">Reset demo data</button>
   </footer>
 
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4.4.1/dist/email.min.js"></script>
 <script>
+  // Real email delivery from this static page goes through EmailJS, which sends from the
+  // connected Gmail account. These IDs are public by design (no password lives here).
+  // Leave any of them empty to fall back to showing emails without sending them.
+  const EMAILJS = {
+    publicKey: "",
+    serviceId: "",
+    templateId: "",
+  };
+
   // Mirrors app.py / logic.py: same validation, honeypot, rate limit and follow-up rule.
   const STORAGE_KEY = "clubhouse-demo-v1";
   const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -298,7 +309,43 @@
     const subject = `We received your ${type} enquiry`;
     const body = `Hi ${name},\n\nThanks for your ${type} enquiry. A member of our team will be in touch soon.\n\nClubhouse`;
     console.log(`[EMAIL] to=${email} subject=${JSON.stringify(subject)}\n${body}`);
-    state.emails.push({ to: email, subject, body, sentAt: now.toISOString() });
+    const record = { to: email, subject, body, sentAt: now.toISOString(), delivery: "Sending…" };
+    state.emails.push(record);
+    deliver(record, name);
+  }
+
+  const emailConfigured = () =>
+    EMAILJS.publicKey && EMAILJS.serviceId && EMAILJS.templateId && window.emailjs;
+
+  // Like deliver() in app.py: report failures, never lose the saved enquiry.
+  async function deliver(record, name) {
+    const finish = status => {
+      record.delivery = status;
+      saveState();
+      showDelivery(status);
+      if (location.hash === "#emails") renderEmails();
+    };
+    if (!emailConfigured()) {
+      finish("Not sent (email service not configured)");
+      return;
+    }
+    showDelivery("Sending…");
+    try {
+      await emailjs.send(EMAILJS.serviceId, EMAILJS.templateId, {
+        to_email: record.to, to_name: name, subject: record.subject, message: record.body,
+      }, { publicKey: EMAILJS.publicKey });
+      finish("Sent");
+    } catch (err) {
+      const detail = err && (err.text || err.message) || String(err);
+      console.error("[EMAIL] send failed:", err);
+      finish(`Failed: ${err && err.status ? err.status + " " : ""}${detail}`);
+    }
+  }
+
+  function showDelivery(status) {
+    const el = document.getElementById("thanks-delivery");
+    el.textContent = status === "Sent" ? "sent — check your inbox (and spam folder)." : status;
+    el.style.color = status.startsWith("Failed") ? "var(--error)" : status === "Sent" ? "var(--ok)" : "";
   }
 
   const fmtDate = iso => new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
@@ -345,11 +392,11 @@
       message: data.message.trim(), status: "New",
       createdAt: now.toISOString(), contactedAt: null,
     });
+    document.getElementById("thanks-email").textContent = email;
     sendConfirmationEmail(name, email, data.enquiry_type, now);
     saveState();
 
     formEl.reset();
-    document.getElementById("thanks-email").textContent = email;
     location.hash = "#thanks";
   });
 
@@ -406,7 +453,8 @@
     list.innerHTML = emails.length
       ? emails.map(m => `
         <div class="card">
-          <p class="email-meta">To <strong>${esc(m.to)}</strong> &middot; ${fmtDateTime(m.sentAt)}</p>
+          <p class="email-meta">To <strong>${esc(m.to)}</strong> &middot; ${fmtDateTime(m.sentAt)} &middot;
+            <span style="color:${(m.delivery || "").startsWith("Failed") ? "var(--error)" : m.delivery === "Sent" ? "var(--ok)" : "inherit"}">${esc(m.delivery || "Not sent")}</span></p>
           <h3 style="margin:0 0 0.5rem">${esc(m.subject)}</h3>
           <pre class="email-body">${esc(m.body)}</pre>
         </div>`).join("")
@@ -431,6 +479,10 @@
   }
 
   state = loadState();
+  if (emailConfigured()) {
+    document.getElementById("email-mode").textContent =
+      "A real confirmation email is sent to the address you enter.";
+  }
   window.addEventListener("hashchange", route);
   route();
 </script>
