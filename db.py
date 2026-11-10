@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS emails (
     to_address TEXT NOT NULL,
     subject TEXT NOT NULL,
     body TEXT NOT NULL,
-    sent_at TEXT NOT NULL
+    sent_at TEXT NOT NULL,
+    delivery TEXT NOT NULL DEFAULT 'Logged only'
 );
 
 CREATE TABLE IF NOT EXISTS settings (
@@ -40,6 +41,12 @@ def get_connection(db_path=None):
 
 def init_db(conn):
     conn.executescript(SCHEMA)
+    # databases created before delivery status was tracked lack this column
+    email_columns = [row["name"] for row in conn.execute("PRAGMA table_info(emails)")]
+    if "delivery" not in email_columns:
+        conn.execute(
+            "ALTER TABLE emails ADD COLUMN delivery TEXT NOT NULL DEFAULT 'Logged only'"
+        )
     # simulated day offset starts at 0 (= real "now")
     conn.execute(
         "INSERT OR IGNORE INTO settings (key, value) VALUES ('day_offset', '0')"
@@ -69,11 +76,11 @@ def insert_enquiry(conn, name, email, enquiry_type, message, created_at):
     return cur.lastrowid
 
 
-def insert_email(conn, to_address, subject, body, sent_at):
+def insert_email(conn, to_address, subject, body, sent_at, delivery="Logged only"):
     conn.execute(
-        """INSERT INTO emails (to_address, subject, body, sent_at)
-           VALUES (?, ?, ?, ?)""",
-        (to_address, subject, body, sent_at),
+        """INSERT INTO emails (to_address, subject, body, sent_at, delivery)
+           VALUES (?, ?, ?, ?, ?)""",
+        (to_address, subject, body, sent_at, delivery),
     )
     conn.commit()
 

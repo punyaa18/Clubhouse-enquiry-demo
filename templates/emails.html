@@ -11,6 +11,7 @@
       <th>To</th>
       <th>Subject</th>
       <th>Sent at</th>
+      <th>Delivery</th>
     </tr>
   </thead>
   <tbody>
@@ -19,9 +20,10 @@
       <td>{{ email.to_address }}</td>
       <td>{{ email.subject }}</td>
       <td>{{ email.sent_at }}</td>
+      <td{% if email.delivery.startswith('Failed') %} class="field-error"{% endif %}>{{ email.delivery }}</td>
     </tr>
     {% else %}
-    <tr><td colspan="3">No emails sent yet.</td></tr>
+    <tr><td colspan="4">No emails sent yet.</td></tr>
     {% endfor %}
   </tbody>
 </table>

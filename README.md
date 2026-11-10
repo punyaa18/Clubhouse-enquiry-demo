@@ -27,7 +27,9 @@ pytest
 
 Then visit `http://127.0.0.1:5000/` for the enquiry form and `http://127.0.0.1:5000/staff` for the staff view.
 
-**Optional: send real confirmation emails.** Set `SMTP_HOST`, `SMTP_PORT` (default 587, STARTTLS), `SMTP_USER`, `SMTP_PASSWORD` and optionally `SMTP_FROM` before running, and confirmations are also delivered over SMTP (e.g. Gmail with an app password). Submitting with a disposable address like `test@yopmail.com` lets you check delivery at yopmail.com. Without `SMTP_HOST`, emails are only logged and stored as before; an SMTP failure never loses the enquiry.
+**Optional: send real confirmation emails.** Create a `.env` file next to `app.py` (it is git-ignored) with `SMTP_HOST`, `SMTP_PORT` (default 587, STARTTLS), `SMTP_USER`, `SMTP_PASSWORD` and optionally `SMTP_FROM`, and confirmations are also delivered over SMTP. For Gmail, use `smtp.gmail.com` with an [app password](https://myaccount.google.com/apppasswords) (needs 2-Step Verification). Run `flask --app app test-email` to send one test message to `punyaa@yopmail.com` and print success or the exact SMTP error. Each email's delivery result (sent, logged only, or the failure reason) is shown on the staff "Sent emails" page; an SMTP failure never loses the enquiry.
+
+The GitHub Pages site (`index.html`) is a static, browser-only copy of the app for demoing: it can't send real emails.
 
 ## 2. Main decisions I made
 

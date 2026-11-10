@@ -1,3 +1,5 @@
+import smtplib
+
 import db
 
 VALID_FORM = {
@@ -35,7 +37,13 @@ def test_valid_submit_creates_one_enquiry_and_one_email(client, conn):
     assert emails[0]["to_address"] == "alice@example.com"
 
 
-def test_smtp_send_used_when_configured(client, app_module, monkeypatch):
+def test_without_smtp_email_is_logged_only(client, conn):
+    client.post("/", data=VALID_FORM)
+
+    assert db.list_emails(conn)[0]["delivery"] == "Logged only (SMTP not configured)"
+
+
+def test_smtp_send_used_when_configured(client, conn, app_module, monkeypatch):
     sent = []
     monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
     monkeypatch.setattr(app_module, "smtp_send", lambda *args: sent.append(args))
@@ -44,11 +52,12 @@ def test_smtp_send_used_when_configured(client, app_module, monkeypatch):
 
     assert len(sent) == 1
     assert sent[0][0] == "alice@example.com"
+    assert db.list_emails(conn)[0]["delivery"] == "Sent via smtp.example.com"
 
 
-def test_smtp_failure_still_saves_enquiry(client, conn, app_module, monkeypatch):
+def test_smtp_failure_saves_enquiry_and_shows_error(client, conn, app_module, monkeypatch):
     def failing_send(*args):
-        raise OSError("connection refused")
+        raise smtplib.SMTPAuthenticationError(535, b"Username and Password not accepted")
 
     monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
     monkeypatch.setattr(app_module, "smtp_send", failing_send)
@@ -57,6 +66,44 @@ def test_smtp_failure_still_saves_enquiry(client, conn, app_module, monkeypatch)
 
     assert response.status_code == 302
     assert len(db.list_enquiries(conn)) == 1
+    delivery = db.list_emails(conn)[0]["delivery"]
+    assert delivery.startswith("Failed: SMTPAuthenticationError")
+    assert "535" in delivery
+    assert b"SMTPAuthenticationError" in client.get("/staff/emails").data
+
+
+def test_smtp_send_strips_spaces_from_app_password(app_module, monkeypatch):
+    logins = []
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout):
+            pass
+        def __enter__(self):
+            return self
+        def __exit__(self, *exc):
+            return False
+        def starttls(self):
+            logins.append("starttls")
+        def login(self, user, password):
+            logins.append(password)
+        def send_message(self, msg):
+            pass
+
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
+    monkeypatch.setenv("SMTP_USER", "club@example.com")
+    monkeypatch.setenv("SMTP_PASSWORD", "abcd efgh ijkl mnop")
+    monkeypatch.setattr(app_module.smtplib, "SMTP", FakeSMTP)
+
+    app_module.smtp_send("alice@example.com", "Subject", "Body")
+
+    assert logins == ["starttls", "abcdefghijklmnop"]
+
+
+def test_test_email_command_reports_missing_config(app_module):
+    result = app_module.app.test_cli_runner().invoke(args=["test-email"])
+
+    assert result.exit_code == 1
+    assert "SMTP_HOST is not set" in result.output
 
 
 def test_honeypot_filled_submission_is_rejected(client, conn):

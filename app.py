@@ -6,12 +6,18 @@ import time
 from datetime import datetime, timedelta
 from email.message import EmailMessage
 
+from dotenv import load_dotenv
 from flask import Flask, g, redirect, render_template, request, url_for
 
 import db
 from logic import is_follow_up_due
 
+# SMTP_* settings live in a git-ignored .env next to this file
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
 app = Flask(__name__)
+
+TEST_EMAIL_RECIPIENT = "punyaa@yopmail.com"
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 ENQUIRY_TYPES = ["Membership", "Society day", "Event"]
@@ -81,13 +87,25 @@ def send_confirmation_email(conn, name, email, enquiry_type, now):
     )
     sent_at = now.isoformat(timespec="seconds")
     print(f"[EMAIL] to={email} subject={subject!r}\n{body}\n")
-    db.insert_email(conn, email, subject, body, sent_at)
-    if os.environ.get("SMTP_HOST"):
-        try:
-            smtp_send(email, subject, body)
-        except (smtplib.SMTPException, OSError) as exc:
-            # the enquiry is already saved; a mail failure shouldn't lose it
-            print(f"[EMAIL] SMTP send failed: {exc}")
+    delivery = deliver(email, subject, body)
+    db.insert_email(conn, email, subject, body, sent_at, delivery)
+
+
+def deliver(to_address, subject, body):
+    """Send over SMTP if configured. Returns a delivery status for the emails log.
+
+    Failures are reported, never raised: the enquiry is already saved and a mail
+    problem shouldn't lose it.
+    """
+    if not os.environ.get("SMTP_HOST"):
+        return "Logged only (SMTP not configured)"
+    try:
+        smtp_send(to_address, subject, body)
+    except (smtplib.SMTPException, OSError) as exc:
+        status = f"Failed: {type(exc).__name__}: {exc}"
+        print(f"[EMAIL] SMTP send FAILED - {type(exc).__name__}: {exc}")
+        return status
+    return f"Sent via {os.environ['SMTP_HOST']}"
 
 
 def smtp_send(to_address, subject, body):
@@ -95,7 +113,8 @@ def smtp_send(to_address, subject, body):
     host = os.environ["SMTP_HOST"]
     port = int(os.environ.get("SMTP_PORT", "587"))
     user = os.environ.get("SMTP_USER")
-    password = os.environ.get("SMTP_PASSWORD")
+    # Google shows app passwords in groups of four; the spaces aren't part of it
+    password = os.environ.get("SMTP_PASSWORD", "").replace(" ", "")
 
     msg = EmailMessage()
     msg["From"] = os.environ.get("SMTP_FROM") or user or "clubhouse@localhost"
@@ -223,6 +242,25 @@ def seed_command():
     run_seed(conn)
     conn.close()
     print("Seeded database with demo enquiries.")
+
+
+@app.cli.command("test-email")
+def test_email_command():
+    """Send one test message over SMTP and print success or the exact error."""
+    if not os.environ.get("SMTP_HOST"):
+        print("SMTP_HOST is not set. Create .env with SMTP_HOST, SMTP_PORT, SMTP_USER and SMTP_PASSWORD.")
+        raise SystemExit(1)
+    if not os.environ.get("SMTP_PASSWORD", "").strip():
+        print("SMTP_PASSWORD is empty in .env.")
+        raise SystemExit(1)
+    status = deliver(
+        TEST_EMAIL_RECIPIENT,
+        "Clubhouse SMTP test",
+        "This is a test message from the Clubhouse enquiry app.\n\nClubhouse",
+    )
+    print(f"{TEST_EMAIL_RECIPIENT}: {status}")
+    if status.startswith("Failed"):
+        raise SystemExit(1)
 
 
 with app.app_context():
