@@ -5,7 +5,7 @@ A small Flask + SQLite app for handling golf club enquiries (membership, society
 ## Try it live (real emails)
 
 - **Live app (real emails):** _link added once the Render deployment is live_. Emails are really sent, from punyaa184@gmail.com.
-- **Static demo (simulated, no emails sent):** https://punyaa18.github.io/Clubhouse-enquiry-demo/
+- **Static demo:** https://punyaa18.github.io/Clubhouse-enquiry-demo/ . This is browser-only and stores data in your browser. Once the EmailJS IDs are filled in at the top of `demo.js`, it sends real emails through EmailJS from punyaa184@gmail.com, always to the demo inbox punyaa@yopmail.com. Until then, emails are simulated.
 
 ### Try it in 2 minutes, no install
 
@@ -133,7 +133,7 @@ seed.py             sample enquiries covering every status, with conversations
 templates/          Jinja templates (form, thanks, staff, detail, emails, macros)
 static/style.css    styles; club colours are CSS variables at the top
 tests/              pytest suite with a fake email sender
-index.html          static GitHub Pages demo (browser-only, simulated email)
+index.html, demo.js static GitHub Pages demo (browser-only; EmailJS config block at the top of demo.js)
 render.yaml, Procfile   hosting config (gunicorn)
 ```
 
