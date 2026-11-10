@@ -9,16 +9,17 @@ const EMAILJS = {
   templateId: "template_c0oiwej",
   publicKey: "1khqvfarvV2e_M0FC",
 };
-// Every real email from this demo goes to this one inbox, whatever address was typed.
-const DEMO_RECIPIENT = "punyaa@yopmail.com";
+// The EmailJS template must use {{to_email}} as its "To Email", so each email goes to
+// the address the visitor typed (or the address on that enquiry for replies/follow-ups).
 // ===================================================================================
 
 // Mirrors app.py / logic.py: same validation, honeypot, rate limit, statuses, escalation
 // rules, follow-up rule and message limits. The static page has no server, so real email
 // goes through EmailJS, which delivers from the connected Gmail account.
-// The Python app also caps emails per recipient address; that protects strangers'
-// inboxes, which can't happen here because every email goes to DEMO_RECIPIENT.
+// Same caps as the Python app, counted per browser. Firm limits (allowed domain, rate
+// limit) belong in the EmailJS dashboard, because anyone can clear browser storage.
 const MAX_EMAILS_PER_DAY = 50;
+const MAX_EMAILS_PER_RECIPIENT_PER_DAY = 2;
 const STORAGE_KEY = "clubhouse-demo-v3";
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const ENQUIRY_TYPES = ["Membership", "Society day", "Event"];
@@ -85,10 +86,12 @@ const sendingForReal = () =>
   Boolean(EMAILJS.publicKey && EMAILJS.serviceId && EMAILJS.templateId && window.emailjs);
 
 // caps use real time (not the simulated clock), like the Python app
-function capReached() {
+function capReached(to) {
   const today = new Date().toISOString().slice(0, 10);
   const sentToday = state.emails.filter(m => m.status === "sent" && (m.realAt || "").slice(0, 10) === today);
   if (sentToday.length >= MAX_EMAILS_PER_DAY) return "Daily email limit reached for this demo.";
+  if (sentToday.filter(m => m.to.toLowerCase() === to.toLowerCase()).length >= MAX_EMAILS_PER_RECIPIENT_PER_DAY)
+    return `Limit of ${MAX_EMAILS_PER_RECIPIENT_PER_DAY} emails per address per day reached.`;
   return null;
 }
 
@@ -97,8 +100,7 @@ function capReached() {
 async function deliver(record) {
   record.realAt = new Date().toISOString();
   if (!sendingForReal()) { record.status = "simulated"; return record; }
-  record.to = DEMO_RECIPIENT;  // fixed recipient: the demo never emails anyone else
-  const capError = capReached();
+  const capError = capReached(record.to);
   if (capError) { record.status = "skipped"; record.error = capError; return record; }
   try {
     await emailjs.send(EMAILJS.serviceId, EMAILJS.templateId, {
@@ -600,9 +602,10 @@ state = loadState();
 if (sendingForReal()) {
   document.getElementById("mode-banner").innerHTML =
     `<strong>Real emails:</strong> confirmations, replies and follow-ups are sent from ${CLUB} ` +
-    `to the demo inbox ${DEMO_RECIPIENT} only. Enquiries are stored in this browser only.`;
+    `to the address entered. Please use a throwaway address (for example yourname@yopmail.com). ` +
+    `Enquiries are stored in this browser only.`;
   document.getElementById("compose-mode").innerHTML =
-    `Sent as a real email from <strong>${CLUB}</strong> to the demo inbox <strong>${DEMO_RECIPIENT}</strong>. ` +
+    `Sent as a real email from <strong>${CLUB}</strong> to the address on this enquiry. ` +
     `Replies arrive in the ${CLUB} Gmail inbox.`;
 }
 route();

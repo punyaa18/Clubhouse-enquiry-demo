@@ -5,7 +5,7 @@ A small Flask + SQLite app for handling golf club enquiries (membership, society
 ## Try it live (real emails)
 
 - **Live app (real emails):** _link added once the Render deployment is live_. Emails are really sent, from punyaa184@gmail.com.
-- **Static demo:** https://punyaa18.github.io/Clubhouse-enquiry-demo/ . This is browser-only and stores data in your browser. Once the EmailJS IDs are filled in at the top of `demo.js`, it sends real emails through EmailJS from punyaa184@gmail.com, always to the demo inbox punyaa@yopmail.com. Until then, emails are simulated.
+- **Static demo:** https://punyaa18.github.io/Clubhouse-enquiry-demo/ . This is browser-only and stores data in your browser. With the EmailJS IDs filled in at the top of `demo.js`, it sends real emails through EmailJS from punyaa184@gmail.com to the address the visitor entered. The EmailJS template's "To Email" must be `{{to_email}}`. Without the IDs, emails are simulated.
 
 ### Try it in 2 minutes, no install
 
