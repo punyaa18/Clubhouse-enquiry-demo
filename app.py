@@ -445,7 +445,9 @@ def test_email_command():
     """Send one test message over SMTP and print success or the exact error."""
     reason = mailer.simulated_reason()
     if reason:
-        print(f"Not sending: {reason}. Set SMTP_HOST, SMTP_PORT, SMTP_USER and SMTP_PASSWORD in .env.")
+        hint = "" if mailer.is_configured() else (
+            " Set SMTP_HOST, SMTP_PORT, SMTP_USER and SMTP_PASSWORD in .env.")
+        print(f"Not sending: {reason}.{hint}")
         raise SystemExit(1)
     if not os.environ.get("SMTP_PASSWORD", "").strip():
         print("SMTP_PASSWORD is empty.")

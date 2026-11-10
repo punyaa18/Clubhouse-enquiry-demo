@@ -46,7 +46,7 @@ The session cookie is HTTPS-only by default. Chrome, Edge and Firefox accept it 
 
 1. Turn on 2-Step Verification for the Gmail account.
 2. Create an app password at https://myaccount.google.com/apppasswords.
-3. Create a `.env` file next to `app.py`. It is git-ignored; never commit it.
+3. Copy `.env.example` to `.env` next to `app.py` and replace the placeholder password. `.env` is git-ignored; never commit it.
 
    ```
    SMTP_HOST=smtp.gmail.com
