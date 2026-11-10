@@ -26,9 +26,18 @@
     {% block content %}{% endblock %}
   </main>
   <script>
-    // status dropdowns save on change; the Save button is the no-JS fallback
+    // status dropdowns save on change; the Save button is the no-JS fallback.
+    // Escalating or leaving Escalated needs a note, so open the status form instead.
     document.querySelectorAll("select[data-autosubmit]").forEach(function (select) {
-      select.addEventListener("change", function () { select.form.submit(); });
+      select.addEventListener("change", function () {
+        var needsNote = select.value === "Escalated" || select.dataset.current === "Escalated";
+        var note = select.form.querySelector("[name=note]");
+        if (needsNote && !(note && note.value.trim())) {
+          location.href = select.dataset.noteUrl + "?status=" + encodeURIComponent(select.value) + "#status-change";
+          return;
+        }
+        select.form.submit();
+      });
     });
   </script>
 </body>

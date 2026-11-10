@@ -19,6 +19,22 @@ CREATE TABLE IF NOT EXISTS enquiries (
     created_at TEXT NOT NULL,
     contacted_at TEXT,
     status_changed_at TEXT,
+    escalation_reason TEXT,
+    assigned_to TEXT,
+    priority TEXT,
+    inserted_at TEXT
+);
+
+-- one row per status change; shown as internal notes, never emailed
+CREATE TABLE IF NOT EXISTS status_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    enquiry_id INTEGER NOT NULL,
+    old_status TEXT,
+    new_status TEXT NOT NULL,
+    note TEXT,
+    assigned_to TEXT,
+    priority TEXT,
+    changed_at TEXT NOT NULL,
     inserted_at TEXT
 );
 
@@ -47,6 +63,9 @@ CREATE TABLE IF NOT EXISTS settings (
 MIGRATIONS = [
     ("enquiries", "status_changed_at", "TEXT"),
     ("enquiries", "inserted_at", "TEXT"),
+    ("enquiries", "escalation_reason", "TEXT"),
+    ("enquiries", "assigned_to", "TEXT"),
+    ("enquiries", "priority", "TEXT"),
     ("emails", "enquiry_id", "INTEGER"),
     ("emails", "direction", "TEXT NOT NULL DEFAULT 'outbound'"),
     ("emails", "kind", "TEXT NOT NULL DEFAULT 'confirmation'"),
@@ -94,6 +113,7 @@ def init_db(conn):
         )
     conn.execute("UPDATE enquiries SET inserted_at = ? WHERE inserted_at IS NULL", (real_now(),))
     conn.execute("UPDATE emails SET inserted_at = ? WHERE inserted_at IS NULL", (real_now(),))
+    conn.execute("UPDATE status_history SET inserted_at = ? WHERE inserted_at IS NULL", (real_now(),))
 
     # simulated day offset starts at 0 (= real "now")
     conn.execute(
@@ -169,17 +189,43 @@ def get_enquiry(conn, enquiry_id):
     ).fetchone()
 
 
-def set_status(conn, enquiry_id, status, changed_at):
-    """Change status; status_changed_at only moves when the status really changes."""
+def change_status(conn, enquiry_id, new_status, changed_at,
+                  note=None, assigned_to=None, priority=None):
+    """Set the status and record the change in status_history.
+
+    Escalation details are kept on the enquiry only while it is Escalated.
+    """
+    old_status = get_enquiry(conn, enquiry_id)["status"]
+    escalated = new_status == "Escalated"
     conn.execute(
         """UPDATE enquiries
            SET status = ?, status_changed_at = ?,
                contacted_at = CASE WHEN ? = 'New' THEN contacted_at
-                                   ELSE COALESCE(contacted_at, ?) END
-           WHERE id = ? AND status != ?""",
-        (status, changed_at, status, changed_at, enquiry_id, status),
+                                   ELSE COALESCE(contacted_at, ?) END,
+               escalation_reason = ?, assigned_to = ?, priority = ?
+           WHERE id = ?""",
+        (new_status, changed_at, new_status, changed_at,
+         note if escalated else None,
+         assigned_to if escalated else None,
+         priority if escalated else None,
+         enquiry_id),
+    )
+    conn.execute(
+        """INSERT INTO status_history (enquiry_id, old_status, new_status, note,
+                                       assigned_to, priority, changed_at, inserted_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (enquiry_id, old_status, new_status, note or None, assigned_to or None,
+         priority if escalated else None, changed_at, real_now()),
     )
     conn.commit()
+
+
+def list_history(conn, enquiry_id):
+    """Status changes for one enquiry, newest first."""
+    return conn.execute(
+        "SELECT * FROM status_history WHERE enquiry_id = ? ORDER BY changed_at DESC, id DESC",
+        (enquiry_id,),
+    ).fetchall()
 
 
 def count_real_emails_today(conn, to_address=None):
@@ -193,10 +239,11 @@ def count_real_emails_today(conn, to_address=None):
     return conn.execute(sql, params).fetchone()[0]
 
 
-def count_replies(conn, enquiry_id):
-    """Replies that went out (or were simulated) for one enquiry; failures don't count."""
+def count_staff_messages(conn, enquiry_id):
+    """Replies and follow-ups that went out (or were simulated) for one enquiry;
+    failed or skipped attempts don't count."""
     return conn.execute(
-        "SELECT COUNT(*) FROM emails WHERE enquiry_id = ? AND kind = 'reply' "
+        "SELECT COUNT(*) FROM emails WHERE enquiry_id = ? AND kind IN ('reply', 'follow-up') "
         "AND status IN ('sent', 'simulated')",
         (enquiry_id,),
     ).fetchone()[0]
@@ -208,6 +255,11 @@ def purge_older_than(conn, cutoff):
     conn.execute(
         "DELETE FROM emails WHERE inserted_at < ? "
         "OR (enquiry_id IS NOT NULL AND enquiry_id NOT IN (SELECT id FROM enquiries))",
+        (cutoff,),
+    )
+    conn.execute(
+        "DELETE FROM status_history WHERE inserted_at < ? "
+        "OR enquiry_id NOT IN (SELECT id FROM enquiries)",
         (cutoff,),
     )
     conn.commit()

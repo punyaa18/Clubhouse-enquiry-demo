@@ -1,40 +1,116 @@
 {% extends "base.html" %}
-{% from "macros.html" import status_badge, status_form, delivery_badge %}
+{% from "macros.html" import status_badge, escalation_details, delivery_badge, kind_label %}
 {% block title %}{{ enquiry.name }} - Clubhouse{% endblock %}
 {% block content %}
 <p><a href="{{ url_for('staff') }}">&larr; Back to enquiries</a></p>
 <h1>{{ enquiry.name }}</h1>
 <p class="muted">{{ enquiry.email }} &middot; {{ enquiry.type }} &middot; submitted {{ enquiry.created_at[:10] }}</p>
 
-<div class="card">
-  <p>{{ status_badge(enquiry.status) }}
+<div class="card" id="status-change">
+  <p>{{ status_badge(enquiry.status) }} {{ escalation_details(enquiry) }}
     {% if enquiry.follow_up_due %}<span class="badge badge-due">Follow-up due</span>{% endif %}
     <span class="muted">status changed {{ enquiry.status_changed_at[:16]|replace('T', ' ') }}</span></p>
-  {{ status_form(enquiry, statuses, url_for('enquiry_detail', enquiry_id=enquiry.id)) }}
+  {% if enquiry.status == 'Escalated' and enquiry.escalation_reason %}
+    <p><strong>Reason:</strong> {{ enquiry.escalation_reason }}</p>
+  {% endif %}
+
+  {% set sv = status_values %}
+  <form method="post" action="{{ url_for('update_status', enquiry_id=enquiry.id) }}" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="next" value="{{ url_for('enquiry_detail', enquiry_id=enquiry.id) }}">
+    <div class="field">
+      <label for="status">Status</label>
+      <select id="status" name="status">
+        {% for option in statuses %}
+          <option value="{{ option }}" {% if option == sv.status %}selected{% endif %}>{{ option }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="note">
+        {% if sv.status == 'Escalated' %}Reason for escalating (required)
+        {% elif enquiry.status == 'Escalated' %}Note: why is it no longer escalated? (required)
+        {% else %}Note (optional){% endif %}
+      </label>
+      <textarea id="note" name="note" rows="3" maxlength="{{ note_max }}">{{ sv.note }}</textarea>
+      {% if status_errors.note %}<p class="field-error">{{ status_errors.note }}</p>{% endif %}
+      <p class="field-hint">Up to {{ note_max }} characters. Saved as an internal note: never emailed to the enquirer.</p>
+    </div>
+    {% if sv.status == 'Escalated' %}
+    <div class="field">
+      <label for="assigned_to">Assigned to (optional)</label>
+      <input type="text" id="assigned_to" name="assigned_to" maxlength="{{ assignee_max }}"
+             placeholder="Club manager" value="{{ sv.assigned_to }}">
+      {% if status_errors.assigned_to %}<p class="field-error">{{ status_errors.assigned_to }}</p>{% endif %}
+    </div>
+    <div class="field">
+      <label for="priority">Priority</label>
+      <select id="priority" name="priority">
+        {% for p in priorities %}
+          <option value="{{ p }}" {% if p == sv.priority %}selected{% endif %}>{{ p }}</option>
+        {% endfor %}
+      </select>
+      {% if status_errors.priority %}<p class="field-error">{{ status_errors.priority }}</p>{% endif %}
+    </div>
+    {% endif %}
+    <div class="btn-row">
+      <button type="submit" class="btn btn-primary">{{ 'Escalate' if sv.status == 'Escalated' and enquiry.status != 'Escalated' else 'Save status' }}</button>
+      {% if sv.status != 'Escalated' and enquiry.status != 'Escalated' %}
+        <a class="btn btn-escalate" href="{{ url_for('enquiry_detail', enquiry_id=enquiry.id, status='Escalated') }}#status-change">Escalate</a>
+      {% endif %}
+    </div>
+  </form>
+  <script>
+    // choosing or un-choosing Escalated reloads the form so the escalation fields show/hide
+    document.getElementById("status").addEventListener("change", function (e) {
+      var chosen = {{ sv.status|tojson }}, v = e.target.value;
+      var note = document.getElementById("note").value;
+      if ((v === "Escalated") !== (chosen === "Escalated") && !note.trim()) {
+        location.href = "?status=" + encodeURIComponent(v) + "#status-change";
+      }
+    });
+  </script>
 </div>
 
 <h2>Conversation</h2>
 <ul class="thread">
-  {% for m in messages %}
+  {% for item in timeline %}
+  {% if item.type == 'email' %}{% set m = item.m %}
   <li class="card {{ m.direction }}">
     <p class="muted">
-      {% if m.direction == 'inbound' %}From <strong>{{ m.from_address }}</strong>{% else %}To <strong>{{ m.to_address }}</strong>{% endif %}
-      &middot; {{ m.kind|capitalize }} &middot; {{ m.sent_at[:16]|replace('T', ' ') }}
-      &middot; {{ delivery_badge(m) }}
+      <strong>{{ kind_label(m.kind) }}</strong> &middot;
+      {% if m.direction == 'inbound' %}from <strong>{{ m.from_address }}</strong>{% else %}to <strong>{{ m.to_address }}</strong>{% endif %}
+      &middot; {{ m.sent_at[:16]|replace('T', ' ') }} &middot; {{ delivery_badge(m) }}
     </p>
     <strong>{{ m.subject }}</strong>
     <pre>{{ m.body }}</pre>
   </li>
+  {% else %}{% set h = item.h %}
+  <li class="card note">
+    <p class="muted"><strong>Internal note</strong> (not emailed) &middot; {{ h.changed_at[:16]|replace('T', ' ') }}</p>
+    Status: {{ h.old_status or '—' }} &rarr; {{ status_badge(h.new_status) }}
+    {% if h.priority == 'Urgent' %}<span class="badge badge-urgent">Urgent</span>{% endif %}
+    {% if h.assigned_to %}<span class="muted">&rarr; {{ h.assigned_to }}</span>{% endif %}
+    {% if h.note %}<pre>{{ h.note }}</pre>{% endif %}
+  </li>
+  {% endif %}
   {% endfor %}
 </ul>
 
-<h2 id="reply">Reply</h2>
+<h2 id="compose">{{ compose_kinds[values.kind] }}</h2>
+<div class="btn-row">
+  <a class="btn {{ 'btn-primary' if values.kind == 'reply' else 'btn-secondary' }}"
+     href="{{ url_for('enquiry_detail', enquiry_id=enquiry.id, compose='reply') }}#compose">Reply</a>
+  <a class="btn {{ 'btn-primary' if values.kind == 'follow-up' else 'btn-secondary' }}"
+     href="{{ url_for('enquiry_detail', enquiry_id=enquiry.id, compose='follow-up') }}#compose">Send follow-up</a>
+</div>
 {% if errors.form %}<p class="error-banner">{{ errors.form }}</p>{% endif %}
-{% if replies_left == 0 and not errors %}
-  <p class="notice">This enquiry has had {{ max_replies }} replies, the most this demo allows.</p>
+{% if messages_left == 0 and not errors %}
+  <p class="notice">This enquiry has had {{ max_messages }} replies and follow-ups, the most this demo allows.</p>
 {% else %}
-<form method="post" action="{{ url_for('reply', enquiry_id=enquiry.id) }}#reply" novalidate class="card">
+<form method="post" action="{{ url_for('reply', enquiry_id=enquiry.id) }}#compose" novalidate class="card">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="kind" value="{{ values.kind }}">
   <div class="field">
     <label for="to">To</label>
     <input type="text" id="to" value="{{ enquiry.email }}" readonly>
@@ -53,14 +129,31 @@
   </div>
   <p class="field-hint">
     {% if sending_for_real %}
-      This is sent as a real email from <strong>{{ reply_to }}</strong>. When {{ enquiry.name }} replies,
-      the answer arrives in that inbox.
+      Sent as a real email from <strong>{{ sender }}</strong> to {{ enquiry.email }}. When {{ enquiry.name }}
+      replies, the answer arrives in the <strong>{{ reply_to }}</strong> inbox.
     {% else %}
-      SIMULATED: {{ simulated_reason }}, so the reply is stored here but not really sent.
+      SIMULATED: {{ simulated_reason }}, so this is stored here but not really sent.
     {% endif %}
-    {{ replies_left }} of {{ max_replies }} replies left for this enquiry.
+    {{ messages_left }} of {{ max_messages }} replies and follow-ups left for this enquiry.
   </p>
-  <button type="submit" class="btn btn-primary">Send reply</button>
+  <button type="submit" class="btn btn-primary">Send {{ compose_kinds[values.kind]|lower }}</button>
 </form>
+{% endif %}
+
+<h2>Status history</h2>
+{% if history %}
+<ul class="history">
+  {% for h in history %}
+  <li>
+    <span class="muted">{{ h.changed_at[:16]|replace('T', ' ') }}</span>
+    {{ h.old_status or '—' }} &rarr; <strong>{{ h.new_status }}</strong>
+    {% if h.priority == 'Urgent' %}<span class="badge badge-urgent">Urgent</span>{% endif %}
+    {% if h.assigned_to %}<span class="muted">assigned to {{ h.assigned_to }}</span>{% endif %}
+    {% if h.note %}<br>{{ h.note }}{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="muted">No status changes yet.</p>
 {% endif %}
 {% endblock %}

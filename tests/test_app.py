@@ -367,7 +367,7 @@ def test_reply_always_goes_to_enquirer(client, conn, fake_sender):
 
 def test_reply_keeps_booked_status(client, conn):
     enquiry = make_enquiry(client, conn)
-    db.set_status(conn, enquiry["id"], "Booked", "2026-01-01T00:00:00")
+    db.change_status(conn, enquiry["id"], "Booked", "2026-01-01T00:00:00")
     reply(client, enquiry["id"])
     assert db.get_enquiry(conn, enquiry["id"])["status"] == "Booked"
 
@@ -418,13 +418,20 @@ def test_reply_subject_to_per_recipient_cap(client, conn, fake_sender):
     assert len(fake_sender.sent) == 2
 
 
-def test_max_three_replies_per_enquiry(client, conn):
+def test_max_five_messages_per_enquiry(client, conn):
     enquiry = make_enquiry(client, conn)
-    for _ in range(3):
+    for _ in range(5):
         assert reply(client, enquiry["id"]).status_code == 302
     response = reply(client, enquiry["id"])
     assert response.status_code == 400
-    assert b"already has 3 replies" in response.data
+    assert b"already has 5 replies and follow-ups" in response.data
+
+
+def test_per_enquiry_limit_configurable(client, conn, monkeypatch):
+    monkeypatch.setenv("MAX_MESSAGES_PER_ENQUIRY", "1")
+    enquiry = make_enquiry(client, conn)
+    assert reply(client, enquiry["id"]).status_code == 302
+    assert reply(client, enquiry["id"]).status_code == 400
 
 
 def test_reply_needs_csrf(client, conn, fake_sender):
@@ -460,4 +467,4 @@ def test_data_older_than_24_hours_deleted(client, conn):
 def test_empty_database_is_reseeded(app_module, client, conn):
     app_module.app.config["AUTO_SEED"] = True
     client.get("/")
-    assert db.count_enquiries(conn) == 7
+    assert db.count_enquiries(conn) == 8

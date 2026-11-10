@@ -221,6 +221,16 @@ th { color: var(--muted); font-size: 0.85rem; text-transform: uppercase; }
 .badge-Awaiting-reply { background: var(--notice-bg); border-color: var(--notice-border); }
 .badge-Booked { background: var(--ok-bg); border-color: #a9d3b8; color: var(--ok); }
 .badge-Closed { color: var(--muted); }
+.badge-Escalated { background: var(--error); border-color: var(--error); color: #fff; }
+.badge-urgent { background: #fdecea; color: var(--error); border: 1px solid var(--error); }
+
+.btn-escalate { background: var(--surface); color: var(--error); border: 1px solid var(--error); }
+.btn-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+.status-form { flex-wrap: wrap; }
+
+.thread li.note { border-left-color: var(--muted); background: var(--bg); border-style: dashed; }
+.history { list-style: none; padding: 0; margin: 0; }
+.history li { padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
 
 .badge-sent { background: var(--ok-bg); color: var(--ok); }
 .badge-failed, .badge-skipped { background: #fdecea; color: var(--error); }

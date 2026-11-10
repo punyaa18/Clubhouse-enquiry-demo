@@ -1,11 +1,12 @@
 {% extends "base.html" %}
-{% from "macros.html" import status_badge, status_form %}
+{% from "macros.html" import status_badge, status_form, escalation_details %}
 {% block title %}Staff - Clubhouse{% endblock %}
 {% block content %}
 <h1>Enquiries</h1>
 
 <div class="staff-toolbar">
   <p class="follow-up-count">
+    <strong>{{ escalated_count }}</strong> escalated,
     <strong>{{ follow_up_count }}</strong> follow-up{{ 's' if follow_up_count != 1 else '' }} due
   </p>
   <p class="sim-time">Simulated date: {{ simulated_now.strftime('%d %b %Y') }} (offset: {{ day_offset }} day{{ 's' if day_offset != 1 else '' }})</p>
@@ -44,11 +45,17 @@
       <td>{{ enquiry.type }}</td>
       <td>
         {{ status_badge(enquiry.status) }}
+        {{ escalation_details(enquiry) }}
         {% if enquiry.follow_up_due %}<span class="badge badge-due">Follow-up due</span>{% endif %}
         <br><span class="muted">since {{ enquiry.status_changed_at[:10] }}</span>
       </td>
       <td>{{ enquiry.created_at[:10] }}</td>
-      <td>{{ status_form(enquiry, statuses, request.full_path) }}</td>
+      <td>
+        {{ status_form(enquiry, statuses, request.full_path) }}
+        {% if enquiry.follow_up_due %}
+          <a class="btn btn-small" href="{{ url_for('enquiry_detail', enquiry_id=enquiry.id, compose='follow-up') }}#compose">Send follow-up</a>
+        {% endif %}
+      </td>
     </tr>
     {% else %}
     <tr><td colspan="5">No enquiries match this filter.</td></tr>
@@ -56,6 +63,6 @@
   </tbody>
 </table>
 </div>
-<p class="muted">Enquiries still New after 2 or more days are flagged "Follow-up due" and listed first.
-  Click a name to see the conversation and reply.</p>
+<p class="muted">Escalated enquiries are listed first, then enquiries still New after 2 or more days
+  ("Follow-up due"). Click a name to see the conversation, reply or send a follow-up.</p>
 {% endblock %}

@@ -33,15 +33,21 @@ app.config.update(
 
 EMAIL_RE = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
 ENQUIRY_TYPES = ["Membership", "Society day", "Event"]
-STATUSES = ["New", "Contacted", "Awaiting reply", "Booked", "Closed"]
+STATUSES = ["New", "Contacted", "Awaiting reply", "Escalated", "Booked", "Closed"]
 STATUS_FILTERS = ["All", *STATUSES, "Follow-up due"]
+PRIORITIES = ["Normal", "Urgent"]
+# a reply or follow-up moves an enquiry to "Awaiting reply" unless it is in one of these
+KEEP_STATUS_ON_SEND = ("Escalated", "Booked", "Closed")
+NOTE_MAX_LEN = 500
+ASSIGNEE_MAX_LEN = 100
 NAME_MAX_LEN = 100
 EMAIL_MAX_LEN = 254
 MESSAGE_MAX_LEN = 1000
 REPLY_SUBJECT_MAX_LEN = 200
 REPLY_BODY_MAX_LEN = 5000
-MAX_REPLIES_PER_ENQUIRY = 3
 MAX_EMAILS_PER_RECIPIENT_PER_DAY = 2
+# staff can compose two kinds of message from the same panel
+COMPOSE_KINDS = {"reply": "Reply", "follow-up": "Follow-up"}
 DATA_RETENTION = timedelta(hours=24)
 TEST_EMAIL_RECIPIENT = "punyaa@yopmail.com"
 
@@ -53,6 +59,11 @@ _submission_log = {}
 
 def max_emails_per_day():
     return int(os.environ.get("MAX_EMAILS_PER_DAY", "50"))
+
+
+def max_messages_per_enquiry():
+    """Replies and follow-ups together, per enquiry."""
+    return int(os.environ.get("MAX_MESSAGES_PER_ENQUIRY", "5"))
 
 
 def get_db():
@@ -176,6 +187,29 @@ def validate_enquiry(form):
     return errors
 
 
+def needs_note(old_status, new_status):
+    """Escalating needs a reason; leaving Escalated needs a note saying why."""
+    return new_status == "Escalated" or old_status == "Escalated"
+
+
+def validate_status_change(old_status, values):
+    errors = {}
+    new_status = values["status"]
+    if needs_note(old_status, new_status) and not values["note"]:
+        errors["note"] = ("Please give a reason for escalating." if new_status == "Escalated"
+                          else "Please add a short note, for example why it is resolved.")
+    elif len(values["note"]) > NOTE_MAX_LEN:
+        errors["note"] = f"Keep the note under {NOTE_MAX_LEN} characters."
+    if new_status == "Escalated":
+        if has_line_break(values["assigned_to"]):
+            errors["assigned_to"] = "Assigned to can't contain line breaks."
+        elif len(values["assigned_to"]) > ASSIGNEE_MAX_LEN:
+            errors["assigned_to"] = f"Keep this under {ASSIGNEE_MAX_LEN} characters."
+        if values["priority"] not in PRIORITIES:
+            errors["priority"] = "Choose Normal or Urgent."
+    return errors
+
+
 def validate_reply(values):
     errors = {}
     if not values["subject"]:
@@ -238,6 +272,24 @@ def send_confirmation_email(conn, enquiry_id, name, email, enquiry_type, now):
     )
     return send_email(conn, enquiry_id=enquiry_id, kind="confirmation",
                       to_address=email, subject=subject, body=body, now=now)
+
+
+def notify_manager(conn, enquiry, values, now):
+    """Internal alert to MANAGER_EMAIL when an enquiry is escalated. Never to the enquirer."""
+    manager = os.environ.get("MANAGER_EMAIL", "").strip()
+    if not manager or has_line_break(manager) or not EMAIL_RE.fullmatch(manager):
+        return None
+    reason_line = " ".join(values["note"].split())  # one line: it goes in the subject
+    subject = f"Enquiry escalated: {enquiry['name']}, {reason_line}"[:REPLY_SUBJECT_MAX_LEN]
+    body = (
+        f"Enquiry escalated: {enquiry['name']}, {reason_line}\n\n"
+        f"Priority: {values['priority']}\n"
+        f"Assigned to: {values['assigned_to'] or 'not assigned'}\n"
+        f"Enquiry: {enquiry['type']} from {enquiry['email']}\n\n"
+        f"Reason:\n{values['note']}\n\nClubhouse"
+    )
+    return send_email(conn, enquiry_id=enquiry["id"], kind="escalation-alert",
+                      to_address=manager, subject=subject, body=body, now=now)
 
 
 # --- public form ---
@@ -306,16 +358,21 @@ def staff():
         current = "All"
     enquiries = [with_flags(row, now) for row in db.list_enquiries(conn)]
     follow_up_count = sum(1 for e in enquiries if e["follow_up_due"])
+    escalated_count = sum(1 for e in enquiries if e["status"] == "Escalated")
     if current == "Follow-up due":
         enquiries = [e for e in enquiries if e["follow_up_due"]]
     elif current != "All":
         enquiries = [e for e in enquiries if e["status"] == current]
-    # overdue first; the sort is stable so newest-first holds within each group
-    enquiries.sort(key=lambda e: not e["follow_up_due"])
+    # escalated (urgent first), then overdue follow-ups; the sort is stable so
+    # newest-first holds within each group
+    enquiries.sort(key=lambda e: (e["status"] != "Escalated",
+                                  e["priority"] != "Urgent",
+                                  not e["follow_up_due"]))
     return render_template(
         "staff.html",
         enquiries=enquiries,
         follow_up_count=follow_up_count,
+        escalated_count=escalated_count,
         simulated_now=now,
         day_offset=db.get_day_offset(conn),
         statuses=STATUSES,
@@ -331,24 +388,66 @@ def get_enquiry_or_404(conn, enquiry_id):
     return row
 
 
-def default_reply(enquiry):
+def compose_defaults(enquiry, kind):
+    if kind == "follow-up":
+        return {
+            "kind": kind,
+            "subject": "Following up on your enquiry",
+            "body": (
+                f"Hi {enquiry['name']},\n\n"
+                f"I'm following up on your {enquiry['type'].lower()} enquiry. Do you still need "
+                f"help with it? Just reply to this email and we'll be happy to help, or let us "
+                f"know a good time to call you.\n\n"
+                f"Best regards,\nClubhouse"
+            ),
+        }
     return {
+        "kind": "reply",
         "subject": f"Re: Your {enquiry['type']} enquiry",
         "body": f"Hi {enquiry['name']},\n\n\n\nBest regards,\nClubhouse",
     }
 
 
-def render_detail(conn, row, values, errors=None, status_code=200):
-    replies_used = db.count_replies(conn, row["id"])
+def timeline(conn, enquiry_id):
+    """Emails and internal status notes for one enquiry, oldest first."""
+    items = [{"type": "email", "at": m["sent_at"], "order": (0, m["id"]), "m": m}
+             for m in db.list_conversation(conn, enquiry_id)]
+    items += [{"type": "note", "at": h["changed_at"], "order": (1, h["id"]), "h": h}
+              for h in db.list_history(conn, enquiry_id)]
+    return sorted(items, key=lambda item: (item["at"], item["order"]))
+
+
+def status_change_defaults(row, new_status=None):
+    return {
+        "status": new_status or row["status"],
+        "note": "",
+        "assigned_to": row["assigned_to"] or "",
+        "priority": row["priority"] or "Normal",
+    }
+
+
+def render_detail(conn, row, values, errors=None, status_code=200,
+                  status_values=None, status_errors=None):
+    messages_used = db.count_staff_messages(conn, row["id"])
+    status_values = status_values or status_change_defaults(row)
     return render_template(
         "detail.html",
         enquiry=with_flags(row, simulated_now(conn)),
-        messages=db.list_conversation(conn, row["id"]),
+        timeline=timeline(conn, row["id"]),
+        history=db.list_history(conn, row["id"]),
         statuses=STATUSES,
+        priorities=PRIORITIES,
+        status_values=status_values,
+        status_errors=status_errors or {},
+        note_required=needs_note(row["status"], status_values["status"]),
+        note_max=NOTE_MAX_LEN,
+        assignee_max=ASSIGNEE_MAX_LEN,
         values=values,
         errors=errors or {},
-        replies_left=max(0, MAX_REPLIES_PER_ENQUIRY - replies_used),
-        max_replies=MAX_REPLIES_PER_ENQUIRY,
+        compose_kinds=COMPOSE_KINDS,
+        messages_left=max(0, max_messages_per_enquiry() - messages_used),
+        max_messages=max_messages_per_enquiry(),
+        sender=mailer.from_address(),
         reply_to=mailer.reply_to_address(),
         subject_max=REPLY_SUBJECT_MAX_LEN,
         body_max=REPLY_BODY_MAX_LEN,
@@ -360,49 +459,86 @@ def render_detail(conn, row, values, errors=None, status_code=200):
 def enquiry_detail(enquiry_id):
     conn = get_db()
     row = get_enquiry_or_404(conn, enquiry_id)
-    return render_detail(conn, row, default_reply(row))
+    kind = request.args.get("compose", "reply")
+    if kind not in COMPOSE_KINDS:
+        kind = "reply"
+    # ?status=Escalated opens the status form with that choice, ready for a reason
+    new_status = request.args.get("status")
+    if new_status not in STATUSES:
+        new_status = None
+    return render_detail(conn, row, compose_defaults(row, kind),
+                         status_values=status_change_defaults(row, new_status))
 
 
 @app.route("/staff/<int:enquiry_id>/status", methods=["POST"])
 def update_status(enquiry_id):
     conn = get_db()
-    get_enquiry_or_404(conn, enquiry_id)
-    status = request.form.get("status", "")
-    if status not in STATUSES:
-        abort(400, f"'{status}' is not a valid status. Choose one of: {', '.join(STATUSES)}.")
-    db.set_status(conn, enquiry_id, status, stamp(simulated_now(conn)))
+    row = get_enquiry_or_404(conn, enquiry_id)
+    values = {
+        "status": request.form.get("status", ""),
+        "note": request.form.get("note", "").strip(),
+        "assigned_to": request.form.get("assigned_to", "").strip(),
+        "priority": request.form.get("priority", "Normal"),
+    }
+    if values["status"] not in STATUSES:
+        abort(400, f"'{values['status']}' is not a valid status. "
+                   f"Choose one of: {', '.join(STATUSES)}.")
+    if values["status"] == row["status"] and values["status"] != "Escalated":
+        return redirect(safe_next(request.form.get("next")))  # nothing changed
+
+    errors = validate_status_change(row["status"], values)
+    if errors:
+        return render_detail(conn, row, compose_defaults(row, "reply"), status_code=400,
+                             status_values=values, status_errors=errors)
+
+    now = simulated_now(conn)
+    db.change_status(conn, enquiry_id, values["status"], stamp(now), note=values["note"],
+                     assigned_to=values["assigned_to"], priority=values["priority"])
+    if values["status"] == "Escalated":
+        notify_manager(conn, row, values, now)
+        flash(f"{row['name']} escalated.")
     return redirect(safe_next(request.form.get("next")))
 
 
 @app.route("/staff/<int:enquiry_id>/reply", methods=["POST"])
 def reply(enquiry_id):
+    """Send a reply or a follow-up (the compose panel's two kinds) to the enquirer."""
     conn = get_db()
     row = get_enquiry_or_404(conn, enquiry_id)
+    kind = request.form.get("kind", "reply")
+    if kind not in COMPOSE_KINDS:
+        abort(400, f"'{kind}' is not a message type. Choose a reply or a follow-up.")
+    label = COMPOSE_KINDS[kind]
     values = {
+        "kind": kind,
         "subject": request.form.get("subject", "").strip(),
         "body": request.form.get("body", "").strip(),
     }
     errors = validate_reply(values)
-    if not errors and db.count_replies(conn, enquiry_id) >= MAX_REPLIES_PER_ENQUIRY:
-        errors["form"] = f"This enquiry already has {MAX_REPLIES_PER_ENQUIRY} replies, the most this demo allows."
+    limit = max_messages_per_enquiry()
+    if not errors and db.count_staff_messages(conn, enquiry_id) >= limit:
+        errors["form"] = (f"This enquiry already has {limit} replies and follow-ups, "
+                          f"the most this demo allows.")
     if errors:
         return render_detail(conn, row, values, errors, 400)
 
     now = simulated_now(conn)
     # always the address that submitted the enquiry: staff can't choose a recipient
-    status, error = send_email(conn, enquiry_id=enquiry_id, kind="reply",
+    status, error = send_email(conn, enquiry_id=enquiry_id, kind=kind,
                                to_address=row["email"], subject=values["subject"],
                                body=values["body"], now=now)
     if status in ("sent", "simulated"):
-        if row["status"] not in ("Booked", "Closed"):
-            db.set_status(conn, enquiry_id, "Awaiting reply", stamp(now))
+        if row["status"] not in KEEP_STATUS_ON_SEND and row["status"] != "Awaiting reply":
+            db.change_status(conn, enquiry_id, "Awaiting reply", stamp(now),
+                             note=f"Automatic: {label.lower()} sent to the enquirer.")
         if status == "sent":
-            flash(f"Reply sent to {row['email']}.")
+            flash(f"{label} sent to {row['email']} from {mailer.from_address()}. "
+                  f"Replies will arrive in that Gmail inbox.")
         else:
-            flash(f"Reply saved as SIMULATED ({mailer.simulated_reason()}), not really sent.")
+            flash(f"{label} saved as SIMULATED ({mailer.simulated_reason()}), not really sent.")
         return redirect(url_for("enquiry_detail", enquiry_id=enquiry_id))
 
-    errors = {"form": f"Your reply was not sent: {error} Your text is kept below."}
+    errors = {"form": f"Your {label.lower()} was not sent: {error} Your text is kept below."}
     return render_detail(conn, row, values, errors, 502 if status == "failed" else 429)
 
 

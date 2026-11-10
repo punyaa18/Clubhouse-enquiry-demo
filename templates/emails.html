@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import delivery_badge %}
+{% from "macros.html" import delivery_badge, kind_label %}
 {% block title %}Email Log - Clubhouse{% endblock %}
 {% block content %}
 <h1>Email log</h1>
@@ -21,7 +21,7 @@
   <tbody>
     {% for email in emails %}
     <tr>
-      <td>{{ email.direction|capitalize }}<br><span class="muted">{{ email.kind }}</span></td>
+      <td>{{ email.direction|capitalize }}<br><span class="muted">{{ kind_label(email.kind) }}</span></td>
       <td><span class="muted">From</span> {{ email.from_address }}<br><span class="muted">To</span> {{ email.to_address }}</td>
       <td>
         {% if email.enquiry_name %}<a href="{{ url_for('enquiry_detail', enquiry_id=email.enquiry_id) }}">{{ email.subject }}</a>{% else %}{{ email.subject }}{% endif %}

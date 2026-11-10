@@ -12,16 +12,27 @@ A small Flask + SQLite app for handling golf club enquiries (membership, society
 1. Open a link above and submit an enquiry. On the live app, use a throwaway inbox such as `yourname@yopmail.com` and check it at `https://yopmail.com/?yourname` (look in the spam tab too).
 2. Open **Staff** and find your enquiry at the top of the list.
 3. Press **Advance 1 day** twice. Your enquiry gets a **Follow-up due** badge and moves to the top.
-4. Change its status with the dropdown, for example to **Contacted**. The badge disappears.
-5. Click your name, write a reply and press **Send reply**. It appears in the conversation, and on the live app it arrives in your inbox.
+4. Press **Send follow-up** on that row. A polite follow-up template opens; edit it if you like and send it. The enquiry moves to **Awaiting reply** and the badge disappears. On the live app, the email arrives in your inbox.
+5. Press **Escalate** on any enquiry, give a reason (and optionally an assignee and Urgent). It jumps to the top with a red ⚠ Escalated badge. Move it back with a short note and check the **Status history** on its page.
+6. Click a name, write a reply and press **Send reply**. It appears in the conversation, alongside internal notes for every status change.
 
 ## What it does
 
 - **Enquiry form** with server-side validation, a honeypot field and a per-IP rate limit. Each submission gets one fixed-template confirmation email.
-- **Staff list** with five statuses (New, Contacted, Awaiting reply, Booked, Closed), a dropdown that saves on change (with a Save button when JavaScript is off), and filters for each status and for "Follow-up due". Overdue enquiries are listed first.
+- **Staff list** with six statuses (New, Contacted, Awaiting reply, Escalated, Booked, Closed). A dropdown saves on change, with a Save button when JavaScript is off. There are filters for each status and for "Follow-up due", and a counter ("2 escalated, 3 follow-ups due"). Escalated enquiries are listed first, urgent ones on top, then overdue follow-ups.
 - **Follow-up rule**: an enquiry still **New** after 2 or more days is flagged. The rule is the pure function `is_follow_up_due(enquiry, now)` in `logic.py`.
 - **Simulated clock**: "Advance 1 day" and "Reset time" let you demo the 2-day rule straight away.
-- **Enquiry detail page** (`/staff/<id>`) showing the whole conversation oldest first (enquiry, confirmation, replies) and a **Reply** panel. Replies are sent as real emails to the enquirer from punyaa184@gmail.com, with Reply-To set to the same address, so the enquirer's answer lands in that Gmail inbox. A successful reply moves the enquiry to "Awaiting reply" unless it is Booked or Closed.
+- **Enquiry detail page** (`/staff/<id>`) showing the whole conversation oldest first (enquiry, confirmation, replies, follow-ups, internal notes), plus the status history newest first.
+- **Reply and Send follow-up** share one compose panel and one sender. "Send follow-up" appears on the detail page and on every "Follow-up due" row.
+  - It opens a polite, editable template that uses the enquirer's name and enquiry type.
+  - Both send a real email to the address on that enquiry only, from punyaa184@gmail.com with Reply-To set to the same address. When the enquirer answers, the reply arrives in that Gmail inbox.
+  - A successful send moves the enquiry to "Awaiting reply", which clears the follow-up flag, unless it is Escalated, Booked or Closed.
+  - A failed send keeps your text so you can retry.
+- **Escalation**: choosing "Escalated", or pressing **Escalate**, asks for a reason (required, up to 500 characters). You can also set who it's assigned to (up to 100 characters) and a priority (Normal or Urgent).
+  - Moving an enquiry out of Escalated needs a short note, such as why it is resolved.
+  - Escalated enquiries show a red "⚠ Escalated" badge with text and an icon, plus "Urgent" and the assignee.
+  - The enquirer is never emailed about an escalation. If `MANAGER_EMAIL` is set, a short internal alert ("Enquiry escalated: name, reason") goes to that address. It uses the same sender, caps and kill switch.
+- **Status history**: every status change, including automatic ones after a reply, is saved in a `status_history` table. That includes the old and new status, the note, the assignee and the time. Each change also appears in the conversation as an "Internal note", so it is clearly not an email to the enquirer.
 - **Email log** (`/staff/emails`): every message in and out, each marked SENT, SIMULATED, FAILED (with the exact SMTP error), SKIPPED (a limit was reached) or RECEIVED.
 
 ## Run it locally
@@ -56,6 +67,8 @@ The session cookie is HTTPS-only by default. Chrome, Edge and Firefox accept it 
    # optional
    EMAILS_ENABLED=true
    MAX_EMAILS_PER_DAY=50
+   MAX_MESSAGES_PER_ENQUIRY=5
+   MANAGER_EMAIL=manager@example.com   # internal alert when an enquiry is escalated
    ```
 
    Paste the app password as one 16-character string. Spaces are stripped anyway.
@@ -70,11 +83,11 @@ On a host such as Render, put the same settings in the host's environment variab
 Anyone can type any address into a public form, so without limits the app could be used to send unwanted email from the club's Gmail account. That would annoy the recipients and could get the account suspended.
 
 - **Fixed content.** The public form sends exactly one fixed-template confirmation per submission. Visitors can't choose its subject or body.
-- **Caps.** At most `MAX_EMAILS_PER_DAY` real emails per day across the whole app (default 50), and at most 2 per recipient address per day. Both caps cover confirmations and replies.
-  - When a cap is hit, the enquiry is still saved and the visitor gets a friendly message instead of an email.
+- **Caps.** At most `MAX_EMAILS_PER_DAY` real emails per day across the whole app (default 50), and at most 2 per recipient address per day. Both caps cover confirmations, replies, follow-ups and manager alerts.
+  - When a cap is hit, the enquiry is still saved, nothing is lost, and the person gets a friendly message instead of an email. A staff draft is kept so it can be sent later.
   - Caps use real time, so "Advance 1 day" can't reset them.
-- **Replies.** A reply only ever goes to the address that submitted that enquiry, with at most 3 replies per enquiry.
-  - Replies are plain text, up to 5,000 characters, with no HTML and no attachments.
+- **Replies and follow-ups.** They only ever go to the address that submitted that enquiry. Together they are limited to `MAX_MESSAGES_PER_ENQUIRY` per enquiry (default 5).
+  - They are plain text, up to 5,000 characters, with no HTML and no attachments.
   - Every email ends with the fixed footer "Sent from a demo application. If this reached you by mistake, ignore it."
 - **Kill switch.** Set `EMAILS_ENABLED=false` in the host's environment to switch to simulated mode at once, without a redeploy.
 - **Abuse protection.**

@@ -1,22 +1,45 @@
 {% macro status_badge(status) -%}
+  {%- if status == 'Escalated' -%}
+  <span class="badge badge-status badge-Escalated"><span aria-hidden="true">⚠</span> Escalated</span>
+  {%- else -%}
   <span class="badge badge-status badge-{{ status|replace(' ', '-') }}">{{ status }}</span>
+  {%- endif -%}
 {%- endmacro %}
 
+{% macro escalation_details(enquiry) -%}
+  {%- if enquiry.status == 'Escalated' -%}
+    {% if enquiry.priority == 'Urgent' %}<span class="badge badge-urgent">Urgent</span>{% endif %}
+    {% if enquiry.assigned_to %}<span class="muted">&rarr; {{ enquiry.assigned_to }}</span>{% endif %}
+  {%- endif -%}
+{%- endmacro %}
+
+{# Escalating, or leaving Escalated, needs a note: with JavaScript the dropdown opens
+   the detail page's status form instead of saving straight away. #}
 {% macro status_form(enquiry, statuses, next_url) -%}
 <form method="post" action="{{ url_for('update_status', enquiry_id=enquiry.id) }}" class="status-form">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="next" value="{{ next_url }}">
   <label class="honeypot" for="status-{{ enquiry.id }}">Status for {{ enquiry.name }}</label>
-  <select id="status-{{ enquiry.id }}" name="status" data-autosubmit>
+  <select id="status-{{ enquiry.id }}" name="status" data-autosubmit
+          data-current="{{ enquiry.status }}"
+          data-note-url="{{ url_for('enquiry_detail', enquiry_id=enquiry.id) }}">
     {% for option in statuses %}
       <option value="{{ option }}" {% if option == enquiry.status %}selected{% endif %}>{{ option }}</option>
     {% endfor %}
   </select>
   <button type="submit" class="btn btn-small save-btn">Save</button>
+  {% if enquiry.status != 'Escalated' %}
+  <a class="btn btn-small btn-escalate" href="{{ url_for('enquiry_detail', enquiry_id=enquiry.id, status='Escalated') }}#status-change">Escalate</a>
+  {% endif %}
 </form>
 {%- endmacro %}
 
 {% macro delivery_badge(email) -%}
   <span class="badge badge-{{ email.status }}">{{ email.status|upper }}</span>
   {%- if email.error %} <span class="field-error">{{ email.error }}</span>{% endif %}
+{%- endmacro %}
+
+{% macro kind_label(kind) -%}
+  {{ {'enquiry': 'Enquiry', 'confirmation': 'Confirmation', 'reply': 'Reply',
+      'follow-up': 'Follow-up', 'escalation-alert': 'Escalation alert to manager (internal)'}.get(kind, kind) }}
 {%- endmacro %}

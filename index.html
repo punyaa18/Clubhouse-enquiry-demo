@@ -114,6 +114,15 @@
   .badge-Awaiting-reply { background: var(--notice-bg); border-color: var(--notice-border); }
   .badge-Booked { background: var(--ok-bg); border-color: #a9d3b8; color: var(--ok); }
   .badge-Closed { color: var(--muted); }
+  .badge-Escalated { background: var(--error); border-color: var(--error); color: #fff; }
+  .badge-urgent { background: #fdecea; color: var(--error); border: 1px solid var(--error); }
+  .btn-small { padding: 0.45rem 0.9rem; font-size: 0.9rem; min-height: 36px; background: var(--accent); color: var(--text); }
+  .btn-escalate { background: var(--surface); color: var(--error); border: 1px solid var(--error); }
+  .btn-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+  .row-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+  .thread li.note { border-left-color: var(--muted); background: var(--bg); border-style: dashed; }
+  .history { list-style: none; padding: 0; margin: 0; }
+  .history li { padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
   .badge-simulated { background: var(--notice-bg); color: var(--text); margin-left: 0; }
   .badge-received { background: #e8f0fb; color: var(--text); margin-left: 0; }
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.1rem; margin-bottom: 1rem; }
@@ -207,7 +216,8 @@
     <section id="view-staff" hidden>
       <h1>Enquiries</h1>
       <div class="staff-toolbar">
-        <p class="follow-up-count"><strong id="follow-up-count">0</strong> <span id="follow-up-label">follow-ups</span> due</p>
+        <p class="follow-up-count"><strong id="escalated-count">0</strong> escalated,
+          <strong id="follow-up-count">0</strong> <span id="follow-up-label">follow-ups</span> due</p>
         <p class="sim-time" id="sim-time"></p>
         <button type="button" class="btn btn-secondary" id="advance-day">Advance 1 day</button>
         <button type="button" class="btn btn-secondary" id="reset-time">Reset time</button>
@@ -221,20 +231,52 @@
           <tbody id="enquiry-rows"></tbody>
         </table>
       </div>
-      <p class="muted">Enquiries still New after 2 or more days are flagged "Follow-up due" and listed first.
-        Click a name to see the conversation and reply.</p>
+      <p class="muted">Escalated enquiries are listed first, then enquiries still New after 2 or more days
+        ("Follow-up due"). Click a name to see the conversation, reply or send a follow-up.</p>
     </section>
 
     <!-- Enquiry detail -->
     <section id="view-detail" hidden>
       <p><a href="#staff">&larr; Back to enquiries</a></p>
       <div id="detail-head"></div>
+      <p class="flash" id="status-flash" hidden></p>
+      <form id="status-form" class="card" novalidate>
+        <div class="field">
+          <label for="status-select">Status</label>
+          <select id="status-select"></select>
+        </div>
+        <div class="field">
+          <label for="status-note" id="status-note-label">Note (optional)</label>
+          <textarea id="status-note" rows="3" maxlength="500"></textarea>
+          <p class="field-error" data-status-error="note" hidden></p>
+          <p class="field-hint">Up to 500 characters. Saved as an internal note: never emailed to the enquirer.</p>
+        </div>
+        <div id="escalation-fields" hidden>
+          <div class="field">
+            <label for="status-assigned">Assigned to (optional)</label>
+            <input type="text" id="status-assigned" maxlength="100" placeholder="Club manager">
+            <p class="field-error" data-status-error="assigned_to" hidden></p>
+          </div>
+          <div class="field">
+            <label for="status-priority">Priority</label>
+            <select id="status-priority"><option>Normal</option><option>Urgent</option></select>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button type="submit" class="btn btn-primary" id="status-save">Save status</button>
+          <button type="button" class="btn btn-escalate" id="escalate-btn">Escalate</button>
+        </div>
+      </form>
       <h2>Conversation</h2>
       <ul class="thread" id="thread"></ul>
       <h2 id="reply-heading">Reply</h2>
+      <div class="btn-row">
+        <button type="button" class="btn" data-compose="reply">Reply</button>
+        <button type="button" class="btn" data-compose="follow-up">Send follow-up</button>
+      </div>
       <p class="flash" id="reply-flash" hidden></p>
       <p class="error-banner" id="reply-error" hidden></p>
-      <p class="notice" id="reply-limit" hidden>This enquiry has had 3 replies, the most this demo allows.</p>
+      <p class="notice" id="reply-limit" hidden>This enquiry has had 5 replies and follow-ups, the most this demo allows.</p>
       <form id="reply-form" class="card" novalidate>
         <div class="field">
           <label for="reply-to">To</label>
@@ -253,9 +295,11 @@
             "Sent from a demo application. If this reached you by mistake, ignore it."</p>
         </div>
         <p class="field-hint"><strong>SIMULATED, not really sent.</strong> In the live app this goes out as a real
-          email, and the enquirer's answer arrives in the club's Gmail inbox. <span id="replies-left"></span></p>
-        <button type="submit" class="btn btn-primary">Send reply</button>
+          email from punyaa184@gmail.com, and the enquirer's answer arrives in that Gmail inbox. <span id="replies-left"></span></p>
+        <button type="submit" class="btn btn-primary" id="reply-submit">Send reply</button>
       </form>
+      <h2>Status history</h2>
+      <ul class="history" id="history"></ul>
     </section>
 
     <!-- Email log -->
@@ -272,38 +316,52 @@
   </footer>
 
 <script>
-  // Mirrors app.py / logic.py: same validation, honeypot, rate limit, statuses,
-  // follow-up rule and reply limits. Nothing is sent: every email is simulated.
-  const STORAGE_KEY = "clubhouse-demo-v2";
+  // Mirrors app.py / logic.py: same validation, honeypot, rate limit, statuses, escalation
+  // rules, follow-up rule and message limits. Nothing is sent: every email is simulated.
+  const STORAGE_KEY = "clubhouse-demo-v3";
   const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
   const ENQUIRY_TYPES = ["Membership", "Society day", "Event"];
-  const STATUSES = ["New", "Contacted", "Awaiting reply", "Booked", "Closed"];
+  const STATUSES = ["New", "Contacted", "Awaiting reply", "Escalated", "Booked", "Closed"];
   const FILTERS = ["All", ...STATUSES, "Follow-up due"];
+  const KEEP_STATUS_ON_SEND = ["Escalated", "Booked", "Closed"];
   const NAME_MAX_LEN = 100;
   const MESSAGE_MAX_LEN = 1000;
   const SUBJECT_MAX_LEN = 200;
   const REPLY_MAX_LEN = 5000;
-  const MAX_REPLIES = 3;
+  const NOTE_MAX_LEN = 500;
+  const ASSIGNEE_MAX_LEN = 100;
+  const MAX_MESSAGES = 5;
   const FOLLOW_UP_DAYS = 2;
   const DAY_MS = 24 * 60 * 60 * 1000;
   const RATE_LIMIT_WINDOW_MS = 60 * 1000;
   const RATE_LIMIT_MAX_SUBMISSIONS = 5;
   const CLUB = "punyaa184@gmail.com";
+  const MANAGER = "manager@example.com";
   const FOOTER = "Sent from a demo application. If this reached you by mistake, ignore it.";
+  const KIND_LABELS = { enquiry: "Enquiry", confirmation: "Confirmation", reply: "Reply",
+    "follow-up": "Follow-up", "escalation-alert": "Escalation alert to manager (internal)" };
 
-  // name, email, type, message, days ago, status, [[days after enquiry, staff reply]]
+  // name, email, type, message, days ago,
+  // status changes [[days after, status, note, assigned to, priority]], replies [[days after, text]]
   const DEMO_ENQUIRIES = [
-    ["Alice Brennan", "alice.brennan@example.com", "Membership", "Hi, I'd like to enquire about full membership rates for next season.", 0, "New", []],
-    ["Tom O'Carroll", "tom.ocarroll@example.com", "Society day", "We're looking to book a society day for 24 golfers in June.", 1, "New", []],
-    ["Fiona Walsh", "fiona.walsh@example.com", "Event", "Could you tell me about hosting a 40th birthday party at the clubhouse?", 3, "New", []],
-    ["Declan Murphy", "declan.murphy@example.com", "Membership", "What's included in junior membership this year?", 5, "Contacted", []],
-    ["Grace Kelly", "grace.kelly@example.com", "Society day", "Enquiring about a corporate golf day for 16 people in September.", 2, "Awaiting reply",
+    ["Alice Brennan", "alice.brennan@example.com", "Membership", "Hi, I'd like to enquire about full membership rates for next season.", 0, [], []],
+    ["Tom O'Carroll", "tom.ocarroll@example.com", "Society day", "We're looking to book a society day for 24 golfers in June.", 1, [], []],
+    ["Fiona Walsh", "fiona.walsh@example.com", "Event", "Could you tell me about hosting a 40th birthday party at the clubhouse?", 3, [], []],
+    ["Declan Murphy", "declan.murphy@example.com", "Membership", "What's included in junior membership this year?", 5,
+      [[1, "Contacted", "Called and left a voicemail."]], []],
+    ["Grace Kelly", "grace.kelly@example.com", "Society day", "Enquiring about a corporate golf day for 16 people in September.", 2,
+      [[1, "Awaiting reply", "Automatic: reply sent to the enquirer."]],
       [[1, "Thanks for getting in touch. September works well - could you let us know your preferred date and whether you'd like lunch included?"]]],
-    ["Liam Fitzgerald", "liam.fitzgerald@example.com", "Event", "Do you cater for wedding receptions on site?", 7, "Booked",
+    ["Liam Fitzgerald", "liam.fitzgerald@example.com", "Event", "Do you cater for wedding receptions on site?", 7,
+      [[1, "Awaiting reply", "Automatic: reply sent to the enquirer."], [3, "Booked", "Deposit paid for 14 August."]],
       [[1, "Yes, we cater for receptions of up to 120 guests. Would you like to visit for a tour?"],
        [3, "Great to meet you both today. Your date of 14 August is now confirmed."]]],
-    ["Niamh Byrne", "niamh.byrne@example.com", "Membership", "Is there a waiting list for family membership?", 6, "Closed",
+    ["Niamh Byrne", "niamh.byrne@example.com", "Membership", "Is there a waiting list for family membership?", 6,
+      [[1, "Awaiting reply", "Automatic: reply sent to the enquirer."], [4, "Closed", "Joined another club."]],
       [[1, "There's no waiting list at the moment - the application form is on our website. Let us know if you have any questions."]]],
+    ["Sean Doyle", "sean.doyle@example.com", "Society day", "Our society was double-booked on 3 May and turned away at the first tee. We'd like a refund of the deposit.", 2,
+      [[0, "Contacted", "Apologised by phone; he wants the deposit back."],
+       [1, "Escalated", "Refund request for a double booking - needs manager approval.", "Club manager", "Urgent"]], []],
   ];
 
   let state;
@@ -316,25 +374,36 @@
     body: withFooter(`Hi ${name},\n\nThanks for your ${type} enquiry. A member of our team will be in touch soon.\n\nClubhouse`),
   });
 
-  function addMessage(s, m) {
-    s.emails.push({ id: s.nextEmailId++, ...m });
+  function addMessage(s, m) { s.emails.push({ id: s.nextEmailId++, ...m }); }
+
+  // Like db.change_status: set the status and record it in the history.
+  function changeStatus(s, enquiry, status, at, note = "", assignedTo = "", priority = "Normal") {
+    const escalated = status === "Escalated";
+    s.history.push({ id: s.nextHistoryId++, enquiryId: enquiry.id, oldStatus: enquiry.status, newStatus: status,
+      note: note || "", assignedTo: assignedTo || "", priority: escalated ? priority : "", changedAt: at });
+    Object.assign(enquiry, { status, statusChangedAt: at,
+      escalationReason: escalated ? note : "", assignedTo: escalated ? assignedTo : "", priority: escalated ? priority : "" });
   }
 
   function seedState() {
     const now = Date.now();
-    const s = { nextId: 1, nextEmailId: 1, dayOffset: 0, enquiries: [], emails: [] };
-    DEMO_ENQUIRIES.forEach(([name, email, type, message, daysAgo, status, replies]) => {
+    const s = { nextId: 1, nextEmailId: 1, nextHistoryId: 1, dayOffset: 0, enquiries: [], emails: [], history: [] };
+    DEMO_ENQUIRIES.forEach(([name, email, type, message, daysAgo, changes, replies]) => {
       const created = now - daysAgo * DAY_MS;
-      const at = new Date(created).toISOString();
-      const id = s.nextId++;
-      s.enquiries.push({ id, name, email, type, message, status, createdAt: at, statusChangedAt: at });
-      addMessage(s, { enquiryId: id, direction: "inbound", kind: "enquiry", from: email, to: CLUB, subject: `${type} enquiry`, body: message, sentAt: at, status: "received" });
-      addMessage(s, { enquiryId: id, direction: "outbound", kind: "confirmation", from: CLUB, to: email, ...confirmation(name, type), sentAt: at, status: "simulated" });
+      const at = (days, minutes = 0) => new Date(created + days * DAY_MS + 3600e3 + minutes * 60e3).toISOString();
+      const iso = new Date(created).toISOString();
+      const e = { id: s.nextId++, name, email, type, message, status: "New", createdAt: iso, statusChangedAt: iso,
+        escalationReason: "", assignedTo: "", priority: "" };
+      s.enquiries.push(e);
+      addMessage(s, { enquiryId: e.id, direction: "inbound", kind: "enquiry", from: email, to: CLUB, subject: `${type} enquiry`, body: message, sentAt: iso, status: "received" });
+      addMessage(s, { enquiryId: e.id, direction: "outbound", kind: "confirmation", from: CLUB, to: email, ...confirmation(name, type), sentAt: iso, status: "simulated" });
       replies.forEach(([daysAfter, text]) => addMessage(s, {
-        enquiryId: id, direction: "outbound", kind: "reply", from: CLUB, to: email,
+        enquiryId: e.id, direction: "outbound", kind: "reply", from: CLUB, to: email,
         subject: `Re: Your ${type} enquiry`, body: withFooter(`Hi ${name},\n\n${text}\n\nBest regards,\nClubhouse`),
-        sentAt: new Date(created + daysAfter * DAY_MS).toISOString(), status: "simulated",
+        sentAt: at(daysAfter), status: "simulated",
       }));
+      changes.forEach(([daysAfter, status, note, assignedTo, priority]) =>
+        changeStatus(s, e, status, at(daysAfter, 1), note, assignedTo, priority));
     });
     return s;
   }
@@ -353,19 +422,15 @@
 
   const simulatedNow = () => new Date(Date.now() + state.dayOffset * DAY_MS);
   const getEnquiry = id => state.enquiries.find(e => e.id === id);
-  const conversation = id => state.emails.filter(m => m.enquiryId === id)
-    .sort((a, b) => a.sentAt.localeCompare(b.sentAt) || a.id - b.id);
-  const repliesUsed = id => conversation(id).filter(m => m.kind === "reply").length;
+  const conversation = id => state.emails.filter(m => m.enquiryId === id);
+  const historyFor = id => state.history.filter(h => h.enquiryId === id)
+    .sort((a, b) => b.changedAt.localeCompare(a.changedAt) || b.id - a.id);
+  const messagesUsed = id => conversation(id).filter(m => m.kind === "reply" || m.kind === "follow-up").length;
+  const needsNote = (oldStatus, newStatus) => newStatus === "Escalated" || oldStatus === "Escalated";
 
   function isFollowUpDue(enquiry, now) {
     if (enquiry.status !== "New") return false;
     return now - new Date(enquiry.createdAt) >= FOLLOW_UP_DAYS * DAY_MS;
-  }
-
-  function setStatus(enquiry, status) {
-    if (!STATUSES.includes(status) || enquiry.status === status) return;
-    enquiry.status = status;
-    enquiry.statusChangedAt = simulatedNow().toISOString();
   }
 
   function isRateLimited() {
@@ -402,10 +467,26 @@
     return errors;
   }
 
+  function validateStatusChange(oldStatus, v) {
+    const errors = {};
+    if (needsNote(oldStatus, v.status) && !v.note) {
+      errors.note = v.status === "Escalated" ? "Please give a reason for escalating."
+        : "Please add a short note, for example why it is resolved.";
+    } else if (v.note.length > NOTE_MAX_LEN) errors.note = `Keep the note under ${NOTE_MAX_LEN} characters.`;
+    if (v.status === "Escalated" && v.assignedTo.length > ASSIGNEE_MAX_LEN)
+      errors.assigned_to = `Keep this under ${ASSIGNEE_MAX_LEN} characters.`;
+    return errors;
+  }
+
   const fmtDate = iso => new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
   const fmtDateTime = iso => new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const statusBadge = s => `<span class="badge badge-status badge-${s.replace(/ /g, "-")}">${esc(s)}</span>`;
+  const statusBadge = s => s === "Escalated"
+    ? `<span class="badge badge-status badge-Escalated"><span aria-hidden="true">⚠</span> Escalated</span>`
+    : `<span class="badge badge-status badge-${s.replace(/ /g, "-")}">${esc(s)}</span>`;
+  const escalationDetails = e => e.status !== "Escalated" ? "" :
+    (e.priority === "Urgent" ? ' <span class="badge badge-urgent">Urgent</span>' : "") +
+    (e.assignedTo ? ` <span class="muted">&rarr; ${esc(e.assignedTo)}</span>` : "");
   const deliveryBadge = m => `<span class="badge badge-${m.status}">${m.status.toUpperCase()}</span>`;
   const statusSelect = e => `<label class="sr-only" for="status-${e.id}">Status for ${esc(e.name)}</label>
     <select id="status-${e.id}" data-status="${e.id}">${STATUSES.map(s =>
@@ -448,7 +529,7 @@
     const email = data.email.trim();
     const id = state.nextId++;
     state.enquiries.push({ id, name, email, type: data.enquiry_type, message: data.message.trim(),
-      status: "New", createdAt: at, statusChangedAt: at });
+      status: "New", createdAt: at, statusChangedAt: at, escalationReason: "", assignedTo: "", priority: "" });
     addMessage(state, { enquiryId: id, direction: "inbound", kind: "enquiry", from: email, to: CLUB,
       subject: `${data.enquiry_type} enquiry`, body: data.message.trim(), sentAt: at, status: "received" });
     addMessage(state, { enquiryId: id, direction: "outbound", kind: "confirmation", from: CLUB, to: email,
@@ -465,11 +546,14 @@
     const now = simulatedNow();
     let rows = [...state.enquiries].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id - a.id);
     const due = rows.filter(e => isFollowUpDue(e, now)).length;
+    const escalated = rows.filter(e => e.status === "Escalated").length;
     if (currentFilter === "Follow-up due") rows = rows.filter(e => isFollowUpDue(e, now));
     else if (currentFilter !== "All") rows = rows.filter(e => e.status === currentFilter);
-    // overdue first; the sort is stable so newest-first holds within each group
-    rows.sort((a, b) => isFollowUpDue(b, now) - isFollowUpDue(a, now));
+    // escalated (urgent first), then overdue; the sort is stable so newest-first holds within each group
+    const rank = e => [e.status !== "Escalated", e.priority !== "Urgent", !isFollowUpDue(e, now)];
+    rows.sort((a, b) => { const ra = rank(a), rb = rank(b); for (let i = 0; i < 3; i++) if (ra[i] !== rb[i]) return ra[i] - rb[i]; return 0; });
 
+    document.getElementById("escalated-count").textContent = escalated;
     document.getElementById("follow-up-count").textContent = due;
     document.getElementById("follow-up-label").textContent = due === 1 ? "follow-up" : "follow-ups";
     const off = state.dayOffset;
@@ -484,10 +568,12 @@
       <tr>
         <td><a href="#staff/${e.id}">${esc(e.name)}</a><br><span class="muted">${esc(e.email)}</span></td>
         <td>${esc(e.type)}</td>
-        <td>${statusBadge(e.status)}${isFollowUpDue(e, now) ? '<span class="badge badge-due">Follow-up due</span>' : ""}
+        <td>${statusBadge(e.status)}${escalationDetails(e)}${isFollowUpDue(e, now) ? '<span class="badge badge-due">Follow-up due</span>' : ""}
           <br><span class="muted">since ${fmtDate(e.statusChangedAt)}</span></td>
         <td>${fmtDate(e.createdAt)}</td>
-        <td>${statusSelect(e)}</td>
+        <td><div class="row-actions">${statusSelect(e)}
+          ${e.status !== "Escalated" ? `<a class="btn btn-small btn-escalate" href="#staff/${e.id}/escalate">Escalate</a>` : ""}
+          ${isFollowUpDue(e, now) ? `<a class="btn btn-small" href="#staff/${e.id}/follow-up">Send follow-up</a>` : ""}</div></td>
       </tr>`).join("") : `<tr><td colspan="5">No enquiries match this filter.</td></tr>`;
   }
 
@@ -497,12 +583,20 @@
     renderStaff();
   });
 
-  document.querySelector("main").addEventListener("change", e => {
+  // staff-list dropdowns save on change, except escalating or leaving Escalated, which
+  // opens the detail page's status form for the required note
+  document.getElementById("enquiry-rows").addEventListener("change", e => {
     const id = Number(e.target.dataset.status);
     if (!id) return;
-    setStatus(getEnquiry(id), e.target.value);
+    const enquiry = getEnquiry(id);
+    if (needsNote(enquiry.status, e.target.value)) {
+      pendingStatus = e.target.value;
+      location.hash = `#staff/${id}/status`;
+      return;
+    }
+    if (e.target.value !== enquiry.status) changeStatus(state, enquiry, e.target.value, simulatedNow().toISOString());
     saveState();
-    route();
+    renderStaff();
   });
 
   document.getElementById("advance-day").addEventListener("click", () => {
@@ -512,8 +606,28 @@
     state.dayOffset = 0; saveState(); renderStaff();
   });
 
-  // --- detail + reply ---
+  // --- detail: status, timeline, compose, history ---
   let detailId = null;
+  let composeKind = "reply";
+  let pendingStatus = null;
+
+  function composeDefaults(e, kind) {
+    return kind === "follow-up"
+      ? { subject: "Following up on your enquiry",
+          body: `Hi ${e.name},\n\nI'm following up on your ${e.type.toLowerCase()} enquiry. Do you still need help with it? Just reply to this email and we'll be happy to help, or let us know a good time to call you.\n\nBest regards,\nClubhouse` }
+      : { subject: `Re: Your ${e.type} enquiry`, body: `Hi ${e.name},\n\n\n\nBest regards,\nClubhouse` };
+  }
+
+  function showStatusFields(e) {
+    const chosen = document.getElementById("status-select").value;
+    document.getElementById("escalation-fields").hidden = chosen !== "Escalated";
+    document.getElementById("status-note-label").textContent =
+      chosen === "Escalated" ? "Reason for escalating (required)"
+        : e.status === "Escalated" ? "Note: why is it no longer escalated? (required)" : "Note (optional)";
+    document.getElementById("status-save").textContent =
+      chosen === "Escalated" && e.status !== "Escalated" ? "Escalate" : "Save status";
+    document.getElementById("escalate-btn").hidden = chosen === "Escalated" || e.status === "Escalated";
+  }
 
   function renderDetail(id, { keepForm = false } = {}) {
     const e = getEnquiry(id);
@@ -523,31 +637,111 @@
     document.getElementById("detail-head").innerHTML = `
       <h1>${esc(e.name)}</h1>
       <p class="muted">${esc(e.email)} &middot; ${esc(e.type)} &middot; submitted ${fmtDate(e.createdAt)}</p>
-      <div class="card">
-        <p>${statusBadge(e.status)}${due ? '<span class="badge badge-due">Follow-up due</span>' : ""}
-          <span class="muted">status changed ${fmtDateTime(e.statusChangedAt)}</span></p>
-        ${statusSelect(e)}
-      </div>`;
-    document.getElementById("thread").innerHTML = conversation(id).map(m => `
-      <li class="card ${m.direction}">
-        <p class="muted">${m.direction === "inbound" ? `From <strong>${esc(m.from)}</strong>` : `To <strong>${esc(m.to)}</strong>`}
-          &middot; ${m.kind[0].toUpperCase() + m.kind.slice(1)} &middot; ${fmtDateTime(m.sentAt)} &middot; ${deliveryBadge(m)}</p>
-        <strong>${esc(m.subject)}</strong>
-        <pre>${esc(m.body)}</pre>
-      </li>`).join("");
+      <p>${statusBadge(e.status)}${escalationDetails(e)}${due ? '<span class="badge badge-due">Follow-up due</span>' : ""}
+        <span class="muted">status changed ${fmtDateTime(e.statusChangedAt)}</span></p>
+      ${e.status === "Escalated" && e.escalationReason ? `<p><strong>Reason:</strong> ${esc(e.escalationReason)}</p>` : ""}`;
 
-    const left = MAX_REPLIES - repliesUsed(id);
+    if (!keepForm) {
+      document.getElementById("status-select").innerHTML =
+        STATUSES.map(s => `<option${s === (pendingStatus || e.status) ? " selected" : ""}>${esc(s)}</option>`).join("");
+      document.getElementById("status-note").value = "";
+      document.getElementById("status-assigned").value = e.assignedTo || "";
+      document.getElementById("status-priority").value = e.priority || "Normal";
+      showErrors("data-status-error", {});
+      pendingStatus = null;
+    }
+    showStatusFields(e);
+
+    // emails and internal notes, oldest first
+    const items = [
+      ...conversation(id).map(m => ({ at: m.sentAt, order: [0, m.id], html: `
+        <li class="card ${m.direction}">
+          <p class="muted"><strong>${KIND_LABELS[m.kind] || esc(m.kind)}</strong> &middot;
+            ${m.direction === "inbound" ? `from <strong>${esc(m.from)}</strong>` : `to <strong>${esc(m.to)}</strong>`}
+            &middot; ${fmtDateTime(m.sentAt)} &middot; ${deliveryBadge(m)}</p>
+          <strong>${esc(m.subject)}</strong>
+          <pre>${esc(m.body)}</pre>
+        </li>` })),
+      ...historyFor(id).map(h => ({ at: h.changedAt, order: [1, h.id], html: `
+        <li class="card note">
+          <p class="muted"><strong>Internal note</strong> (not emailed) &middot; ${fmtDateTime(h.changedAt)}</p>
+          Status: ${esc(h.oldStatus || "—")} &rarr; ${statusBadge(h.newStatus)}
+          ${h.priority === "Urgent" ? '<span class="badge badge-urgent">Urgent</span>' : ""}
+          ${h.assignedTo ? `<span class="muted">&rarr; ${esc(h.assignedTo)}</span>` : ""}
+          ${h.note ? `<pre>${esc(h.note)}</pre>` : ""}
+        </li>` })),
+    ].sort((a, b) => a.at.localeCompare(b.at) || a.order[0] - b.order[0] || a.order[1] - b.order[1]);
+    document.getElementById("thread").innerHTML = items.map(i => i.html).join("");
+
+    const history = historyFor(id);
+    document.getElementById("history").innerHTML = history.length ? history.map(h => `
+      <li><span class="muted">${fmtDateTime(h.changedAt)}</span> ${esc(h.oldStatus || "—")} &rarr; <strong>${esc(h.newStatus)}</strong>
+        ${h.priority === "Urgent" ? '<span class="badge badge-urgent">Urgent</span>' : ""}
+        ${h.assignedTo ? `<span class="muted">assigned to ${esc(h.assignedTo)}</span>` : ""}
+        ${h.note ? `<br>${esc(h.note)}` : ""}</li>`).join("") : `<li class="muted">No status changes yet.</li>`;
+
+    const left = MAX_MESSAGES - messagesUsed(id);
+    const label = composeKind === "follow-up" ? "Follow-up" : "Reply";
+    document.getElementById("reply-heading").textContent = label;
+    document.querySelectorAll("[data-compose]").forEach(b =>
+      b.className = "btn " + (b.dataset.compose === composeKind ? "btn-primary" : "btn-secondary"));
+    document.getElementById("reply-submit").textContent = `Send ${label.toLowerCase()}`;
     document.getElementById("reply-limit").hidden = left > 0;
     document.getElementById("reply-form").hidden = left <= 0;
-    document.getElementById("replies-left").textContent = `${left} of ${MAX_REPLIES} replies left for this enquiry.`;
+    document.getElementById("replies-left").textContent = `${left} of ${MAX_MESSAGES} replies and follow-ups left for this enquiry.`;
     document.getElementById("reply-to").value = e.email;
     if (!keepForm) {
-      document.getElementById("reply-subject").value = `Re: Your ${e.type} enquiry`;
-      document.getElementById("reply-body").value = `Hi ${e.name},\n\n\n\nBest regards,\nClubhouse`;
+      const d = composeDefaults(e, composeKind);
+      document.getElementById("reply-subject").value = d.subject;
+      document.getElementById("reply-body").value = d.body;
       document.getElementById("reply-error").hidden = true;
       showErrors("data-reply-error", {});
     }
   }
+
+  document.getElementById("status-select").addEventListener("change", () => showStatusFields(getEnquiry(detailId)));
+  document.getElementById("escalate-btn").addEventListener("click", () => {
+    document.getElementById("status-select").value = "Escalated";
+    showStatusFields(getEnquiry(detailId));
+    document.getElementById("status-note").focus();
+  });
+
+  document.getElementById("status-form").addEventListener("submit", ev => {
+    ev.preventDefault();
+    const e = getEnquiry(detailId);
+    const v = {
+      status: document.getElementById("status-select").value,
+      note: document.getElementById("status-note").value.trim(),
+      assignedTo: document.getElementById("status-assigned").value.trim(),
+      priority: document.getElementById("status-priority").value,
+    };
+    if (!STATUSES.includes(v.status)) return;
+    if (v.status === e.status && v.status !== "Escalated") return;
+    const errors = validateStatusChange(e.status, v);
+    showErrors("data-status-error", errors);
+    if (Object.keys(errors).length) return;  // typed text stays in the form
+    const at = simulatedNow().toISOString();
+    changeStatus(state, e, v.status, at, v.note, v.assignedTo, v.priority);
+    let message = `Status changed to ${v.status}.`;
+    if (v.status === "Escalated") {
+      const reasonLine = v.note.split(/\s+/).join(" ");
+      addMessage(state, { enquiryId: e.id, direction: "outbound", kind: "escalation-alert", from: CLUB, to: MANAGER,
+        subject: `Enquiry escalated: ${e.name}, ${reasonLine}`.slice(0, SUBJECT_MAX_LEN),
+        body: withFooter(`Enquiry escalated: ${e.name}, ${reasonLine}\n\nPriority: ${v.priority}\nAssigned to: ${v.assignedTo || "not assigned"}\nEnquiry: ${e.type} from ${e.email}\n\nReason:\n${v.note}\n\nClubhouse`),
+        sentAt: at, status: "simulated" });
+      message = `${e.name} escalated. Manager alert to ${MANAGER}: SIMULATED, not really sent.`;
+    }
+    saveState();
+    renderDetail(e.id);
+    const flash = document.getElementById("status-flash");
+    flash.textContent = message;
+    flash.hidden = false;
+  });
+
+  document.querySelectorAll("[data-compose]").forEach(b => b.addEventListener("click", () => {
+    composeKind = b.dataset.compose;
+    renderDetail(detailId, { keepForm: false });
+  }));
 
   document.getElementById("reply-form").addEventListener("submit", ev => {
     ev.preventDefault();
@@ -559,20 +753,23 @@
     const replyError = document.getElementById("reply-error");
     replyError.hidden = true;
     if (Object.keys(errors).length) return;
-    if (repliesUsed(e.id) >= MAX_REPLIES) {
-      replyError.textContent = `This enquiry already has ${MAX_REPLIES} replies, the most this demo allows.`;
+    if (messagesUsed(e.id) >= MAX_MESSAGES) {
+      replyError.textContent = `This enquiry already has ${MAX_MESSAGES} replies and follow-ups, the most this demo allows.`;
       replyError.hidden = false;
       return;
     }
+    const kind = composeKind;
+    const label = kind === "follow-up" ? "Follow-up" : "Reply";
     const at = simulatedNow().toISOString();
     // always the address that submitted the enquiry
-    addMessage(state, { enquiryId: e.id, direction: "outbound", kind: "reply", from: CLUB, to: e.email,
+    addMessage(state, { enquiryId: e.id, direction: "outbound", kind, from: CLUB, to: e.email,
       subject, body: withFooter(body), sentAt: at, status: "simulated" });
-    if (!["Booked", "Closed"].includes(e.status)) setStatus(e, "Awaiting reply");
+    if (!KEEP_STATUS_ON_SEND.includes(e.status) && e.status !== "Awaiting reply")
+      changeStatus(state, e, "Awaiting reply", at, `Automatic: ${label.toLowerCase()} sent to the enquirer.`);
     saveState();
     renderDetail(e.id);
     const flash = document.getElementById("reply-flash");
-    flash.textContent = `Reply saved as SIMULATED, not really sent (to ${e.email}).`;
+    flash.textContent = `${label} to ${e.email} saved as SIMULATED, not really sent. In the live app it is sent from ${CLUB}, and replies arrive in that Gmail inbox.`;
     flash.hidden = false;
   });
 
@@ -582,7 +779,7 @@
     const emails = [...state.emails].sort((a, b) => b.sentAt.localeCompare(a.sentAt) || b.id - a.id);
     list.innerHTML = emails.length ? emails.map(m => `
       <div class="card ${m.direction}">
-        <p class="muted">${m.direction === "inbound" ? "Inbound" : "Outbound"} ${m.kind} &middot;
+        <p class="muted">${m.direction === "inbound" ? "Inbound" : "Outbound"} &middot; ${KIND_LABELS[m.kind] || esc(m.kind)} &middot;
           From <strong>${esc(m.from)}</strong> to <strong>${esc(m.to)}</strong> &middot; ${fmtDateTime(m.sentAt)} &middot; ${deliveryBadge(m)}</p>
         <a href="#staff/${m.enquiryId}"><strong>${esc(m.subject)}</strong></a>
         <pre class="email-body">${esc(m.body)}</pre>
@@ -591,15 +788,15 @@
   }
 
   document.getElementById("reset-demo").addEventListener("click", () => {
-    state = seedState(); currentFilter = "All"; saveState(); route();
+    state = seedState(); currentFilter = "All"; detailId = null; saveState(); route();
   });
 
-  // --- routing ---
+  // --- routing: #form #thanks #staff #emails #staff/<id>[/follow-up|/escalate|/status] ---
   const VIEWS = ["form", "thanks", "staff", "detail", "emails"];
   function route() {
     const hash = location.hash.slice(1);
     let view = hash;
-    const detailMatch = hash.match(/^staff\/(\d+)$/);
+    const detailMatch = hash.match(/^staff\/(\d+)(?:\/(follow-up|escalate|status))?$/);
     if (detailMatch) view = "detail";
     if (!VIEWS.includes(view)) view = "form";
     if (view === "thanks" && !document.getElementById("thanks-email").textContent) view = "form";
@@ -609,15 +806,22 @@
     if (view === "staff") renderStaff();
     if (view === "detail") {
       const id = Number(detailMatch[1]);
-      renderDetail(id, { keepForm: id === detailId });
+      const action = detailMatch[2];
+      if (action === "escalate") pendingStatus = "Escalated";
+      const sameEnquiry = id === detailId;
+      if (!sameEnquiry || action === "follow-up") composeKind = action === "follow-up" ? "follow-up" : "reply";
+      renderDetail(id, { keepForm: sameEnquiry && !action });
+      if (action === "follow-up") document.getElementById("reply-heading").scrollIntoView?.();
+      if (action === "escalate" || action === "status") document.getElementById("status-note").focus();
     }
     if (view === "emails") renderEmails();
   }
 
   window.addEventListener("hashchange", () => {
     document.getElementById("reply-flash").hidden = true;
-    route();
+    document.getElementById("status-flash").hidden = true;
     window.scrollTo(0, 0);
+    route();
   });
 
   state = loadState();
