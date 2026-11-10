@@ -1,7 +1,10 @@
 """Routes for the golf club enquiry demo. See db.py for storage, logic.py for rules."""
+import os
 import re
+import smtplib
 import time
 from datetime import datetime, timedelta
+from email.message import EmailMessage
 
 from flask import Flask, g, redirect, render_template, request, url_for
 
@@ -79,6 +82,34 @@ def send_confirmation_email(conn, name, email, enquiry_type, now):
     sent_at = now.isoformat(timespec="seconds")
     print(f"[EMAIL] to={email} subject={subject!r}\n{body}\n")
     db.insert_email(conn, email, subject, body, sent_at)
+    if os.environ.get("SMTP_HOST"):
+        try:
+            smtp_send(email, subject, body)
+        except (smtplib.SMTPException, OSError) as exc:
+            # the enquiry is already saved; a mail failure shouldn't lose it
+            print(f"[EMAIL] SMTP send failed: {exc}")
+
+
+def smtp_send(to_address, subject, body):
+    """Send via the SMTP server configured in SMTP_* environment variables."""
+    host = os.environ["SMTP_HOST"]
+    port = int(os.environ.get("SMTP_PORT", "587"))
+    user = os.environ.get("SMTP_USER")
+    password = os.environ.get("SMTP_PASSWORD")
+
+    msg = EmailMessage()
+    msg["From"] = os.environ.get("SMTP_FROM") or user or "clubhouse@localhost"
+    msg["To"] = to_address
+    msg["Subject"] = subject
+    msg.set_content(body)
+
+    with smtplib.SMTP(host, port, timeout=15) as server:
+        if port != 25:
+            server.starttls()
+        if user and password:
+            server.login(user, password)
+        server.send_message(msg)
+    print(f"[EMAIL] delivered via SMTP {host}:{port}")
 
 
 @app.route("/", methods=["GET", "POST"])

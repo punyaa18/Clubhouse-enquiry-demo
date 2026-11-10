@@ -35,6 +35,30 @@ def test_valid_submit_creates_one_enquiry_and_one_email(client, conn):
     assert emails[0]["to_address"] == "alice@example.com"
 
 
+def test_smtp_send_used_when_configured(client, app_module, monkeypatch):
+    sent = []
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
+    monkeypatch.setattr(app_module, "smtp_send", lambda *args: sent.append(args))
+
+    client.post("/", data=VALID_FORM)
+
+    assert len(sent) == 1
+    assert sent[0][0] == "alice@example.com"
+
+
+def test_smtp_failure_still_saves_enquiry(client, conn, app_module, monkeypatch):
+    def failing_send(*args):
+        raise OSError("connection refused")
+
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
+    monkeypatch.setattr(app_module, "smtp_send", failing_send)
+
+    response = client.post("/", data=VALID_FORM)
+
+    assert response.status_code == 302
+    assert len(db.list_enquiries(conn)) == 1
+
+
 def test_honeypot_filled_submission_is_rejected(client, conn):
     response = client.post("/", data={**VALID_FORM, "website": "http://spam.example.com"})
     assert response.status_code == 200

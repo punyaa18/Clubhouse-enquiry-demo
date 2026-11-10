@@ -27,6 +27,8 @@ pytest
 
 Then visit `http://127.0.0.1:5000/` for the enquiry form and `http://127.0.0.1:5000/staff` for the staff view.
 
+**Optional: send real confirmation emails.** Set `SMTP_HOST`, `SMTP_PORT` (default 587, STARTTLS), `SMTP_USER`, `SMTP_PASSWORD` and optionally `SMTP_FROM` before running, and confirmations are also delivered over SMTP (e.g. Gmail with an app password). Submitting with a disposable address like `test@yopmail.com` lets you check delivery at yopmail.com. Without `SMTP_HOST`, emails are only logged and stored as before; an SMTP failure never loses the enquiry.
+
 ## 2. Main decisions I made
 
 - **Flask + SQLite (stdlib `sqlite3`)**: the task is small and single-user (no concurrent writers to worry about), so a zero-config file database avoids any setup friction while still forcing me to write real parameterised SQL rather than hiding it behind an ORM. Flask keeps routing, templating, and validation visible and easy to talk through line by line.
